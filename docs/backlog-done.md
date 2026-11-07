@@ -7,6 +7,10 @@ are in [ShotDetector's backlog-done.md](https://github.com/bisforboman/shotdetec
   - Why: the benchmark timed only reading frames against ffmpeg's pipe, so the performance work of 2026-11-07 couldn't be measured (docs/decisions/2026-11-07-performance-work.md)
   - Status: Done (2026-11-07)
 
+- Vectorise FrameDecoder's rotation: `Orient`'s hflip and transpose with Vector128 shuffles and blocks, and a buffer pool for its output
+  - Why: a display rotation of 90 or 270 degrees (phone video) moves one sample at a time; at 1080p that costs more than decoding the frame, and the rotated read of ReadPaths takes about twice the plain one (docs/decisions/2026-11-07-performance-work.md)
+  - Status: Done (2026-11-07)
+
 - Faster measures: GamutMeter's table, FreezeDetector's SAD, TruePeakMeter's interpolation
   - Why: GamutMeter rebuilds its table for every meter (64 MB and most of a second at 12 bits); FreezeDetector's sum of differences widens bytes three times and is scalar above 8 bits (much slower at 10 bits than at 8); TruePeakMeter interpolates one point at a time. Integer sums, a cache, and vectors that keep each point's order: the same results (docs/decisions/2026-11-07-performance-work.md)
   - Status: Done (2026-11-07)
