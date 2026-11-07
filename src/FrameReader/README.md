@@ -20,9 +20,10 @@ dotnet add package FrameReader.Native.linux-x64   # FFmpeg's libraries for your 
 ```
 
 FrameReader has its own versions (semantic versioning) and
-[changelog](https://github.com/bisforboman/shotdetector/blob/main/src/FrameReader/CHANGELOG.md). It began as
-[ShotDetector](https://github.com/bisforboman/shotdetector)'s in-process decoding, which now depends on it; issues go
-to that repository, labelled `framereader`. MIT; FFmpeg's libraries are LGPL and loaded dynamically
+[changelog](https://github.com/bisforboman/FrameReader/blob/main/src/FrameReader/CHANGELOG.md); issues and pull
+requests go to [its repository](https://github.com/bisforboman/FrameReader). It began as
+[ShotDetector](https://github.com/bisforboman/shotdetector)'s in-process decoding, which now depends on it. MIT;
+FFmpeg's libraries are LGPL and loaded dynamically
 ([FFmpeg's libraries](#ffmpegs-libraries)).
 
 ## Quick start
@@ -645,7 +646,7 @@ few rows of each frame (ShotDetector reads its resize's rows this way).
 
 Reading frames against the ffmpeg executable's pipe and FFMpegCore (benchmarks/FrameReader.Benchmarks,
 BenchmarkDotNet, the first 500 frames of three films at whole size and at 160x90, weekly on GitHub's x64 and ARM
-runners): the current numbers are in the [latest runs](https://github.com/bisforboman/shotdetector/actions/workflows/frame-reader-bench.yml). Whole frames come out well ahead of both
+runners): the current numbers are in the [latest runs](https://github.com/bisforboman/FrameReader/actions/workflows/frame-reader-bench.yml). Whole frames come out well ahead of both
 (no process, no pipe); small frames, where decoding is the cost, ahead or equal. FrameReader allocates next to
 nothing per frame (frames are views of FFmpeg's buffers); the pipe readers allocate per frame.
 

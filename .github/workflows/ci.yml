@@ -1,0 +1,299 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]   # drafts run nothing until marked ready
+
+# A new push to a pull request supersedes its running checks; pushes to main all run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# The token only reads the repository.
+permissions:
+  contents: read
+
+jobs:
+  # Docs-only pull requests (docs/ and *.md): the jobs below still run, so the required check reports, but skip their
+  # steps. Decided here, on a runner with git, from the PR's merge commit against its base.
+  changes:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    outputs:
+      docs_only: ${{ steps.diff.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: github.event_name == 'pull_request'
+        with:
+          fetch-depth: 2
+      - id: diff
+        if: github.event_name == 'pull_request'
+        run: |
+          files=$(git diff --name-only HEAD^1 HEAD)
+          if [ -n "$files" ] && ! echo "$files" | grep -qvE '^docs/|\.md$'; then echo docs_only=true >> "$GITHUB_OUTPUT"; fi
+
+  # Line endings are per file here (no .gitattributes; most CRLF, some LF). A file whose lines changed only in their
+  # ending was rewritten by an editor or Git Bash's `sed -i`, and blame would show every line as changed. A few lines
+  # (a mixed file's edited block) pass; more fail the pull request. A conversion on purpose: label the pull request
+  # `line-endings`.
+  line-endings:
+    if: github.event_name == 'pull_request' && !github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'line-endings')
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 2
+      - name: No file's line endings rewritten
+        run: |
+          bad=0
+          while IFS=$'\t' read -r added deleted file; do
+            [ "$added" = "-" ] && continue   # binary
+            ignoring=$(git diff --numstat --ignore-cr-at-eol HEAD^1 HEAD -- "$file" | cut -f1)
+            only=$((added - ${ignoring:-0}))
+            echo "$file: $added lines added, $only only in their line ending"
+            if [ "$only" -gt 20 ]; then
+              echo "::error file=$file::$only lines changed only their line ending (CRLF/LF): keep the file's own"
+              bad=1
+            fi
+          done < <(git diff --numstat HEAD^1 HEAD)
+          exit $bad
+
+  # Our FFmpeg build for linux-x64 (native.yml, cached by the build script's hash): the in-process tests use it.
+  native:
+    needs: changes
+    uses: ./.github/workflows/native.yml
+    with:
+      rids: '["linux-x64"]'
+
+  build:
+    needs: [changes, native]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Changelog tool self-test
+        run: python3 tools/changelog.py --test
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        if: needs.changes.outputs.docs_only != 'true'
+        with:
+          dotnet-version: 10.0.x
+
+      # BtbN's static FFmpeg 8.1: the tests make their media with it and compare with its output.
+      - name: Install ffmpeg
+        id: ffmpeg
+        if: needs.changes.outputs.docs_only != 'true'
+        timeout-minutes: 15
+        uses: ./.github/actions/btbn-ffmpeg
+
+      # In-process decoding with our FFmpeg build (FrameReader.Native's), compared with FFmpeg 8.1's executables put
+      # beside it (BtbN's static build, so they don't load these libraries).
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: needs.changes.outputs.docs_only != 'true'
+        with:
+          name: native-linux-x64
+          path: native/linux-x64
+
+      # The package release.yml packs from these: the libraries under runtimes/, configure.txt and the SBOM at the root.
+      - name: Pack FrameReader.Native
+        if: needs.changes.outputs.docs_only != 'true'
+        run: |
+          dotnet pack src/FrameReader.Native -p:Rid=linux-x64 --output "$RUNNER_TEMP/native-pack"
+          unzip -l "$RUNNER_TEMP"/native-pack/*.nupkg | tee "$RUNNER_TEMP/native-pack.txt"
+          grep -q " sbom.spdx.json$" "$RUNNER_TEMP/native-pack.txt" && grep -q " configure.txt$" "$RUNNER_TEMP/native-pack.txt" &&
+            grep -q " runtimes/linux-x64/native/libavcodec.so.62$" "$RUNNER_TEMP/native-pack.txt"
+
+      - name: FFmpeg 8.1 executables beside our libraries
+        if: needs.changes.outputs.docs_only != 'true'
+        run: |
+          cp "${{ steps.ffmpeg.outputs.bin }}/ffmpeg" "${{ steps.ffmpeg.outputs.bin }}/ffprobe" native/linux-x64/
+          echo "SHOTDETECTOR_FFMPEG_LIBS=$PWD/native/linux-x64" >> "$GITHUB_ENV"
+
+      # BBC's audiowaveform, the reference for WaveformData (its test is skipped without it). Ubuntu doesn't package
+      # it; its maintainer's PPA, as its README says, has a build for each Ubuntu release.
+      - name: Install audiowaveform
+        if: needs.changes.outputs.docs_only != 'true'
+        timeout-minutes: 5   # package mirrors sometimes hang
+        run: |
+          if sudo add-apt-repository -y ppa:chris-needham/ppa > /dev/null && sudo apt-get install -y -o Acquire::Retries=3 --no-install-recommends audiowaveform > /dev/null; then
+            audiowaveform --version
+            echo "AUDIOWAVEFORM=$(command -v audiowaveform)" >> "$GITHUB_ENV"
+          else
+            echo "::warning::audiowaveform didn't install: WaveformData's comparison with it is skipped"
+          fi
+
+      # Widevine's pssh box from Shaka Packager's pssh-box.py, for
+      # RemuxTests.EncryptedAsFfmpegWithWidevineSignalling to compare ours with, byte for byte.
+      - name: pssh-box.py's Widevine pssh
+        if: needs.changes.outputs.docs_only != 'true'
+        run: |
+          curl -fsSL --retry 5 --retry-all-errors -o pssh-box.tar.gz https://github.com/shaka-project/shaka-packager/releases/download/v3.9.3/pssh-box.py.tar.gz
+          echo "277f88fc3a1bcf295f7dbe9c98cc88fbf98308c9adce48256fa74af872326932  pssh-box.tar.gz" | sha256sum -c
+          mkdir pssh-box && tar xzf pssh-box.tar.gz -C pssh-box
+          script=$(find pssh-box -name pssh-box.py | head -1)
+          pssh=$(python3 "$script" --widevine-system-id --key-id a1b2c3d4e5f60718293a4b5c6d7e8f90 --base64)
+          echo "pssh-box.py: $pssh"
+          echo "SHOTDETECTOR_WIDEVINE_PSSH=$pssh" >> "$GITHUB_ENV"
+          # A DRM provider's own WidevinePsshData: key ID, provider "conax", content_id "content-0001".
+          from_data=$(python3 "$script" --widevine-system-id --pssh-data EhChssPU5fYHGCk6S1xtfo+QGgVjb25heCIMY29udGVudC0wMDAx --base64)
+          echo "pssh-box.py --pssh-data: $from_data"
+          echo "SHOTDETECTOR_WIDEVINE_PSSH_FROM_DATA=$from_data" >> "$GITHUB_ENV"
+
+      - name: Test
+        if: needs.changes.outputs.docs_only != 'true'
+        run: dotnet test FrameReader.slnx --logger GitHubActions
+
+      # VideoWriter (H.264) against ffmpeg -c:v libx264, byte for byte: x264's output depends on how it was compiled,
+      # so libraries and executable from one build, BtbN's shared GPL one (ours has no executables).
+      - name: FFmpeg 8.1 with x264, shared
+        id: gpl
+        if: needs.changes.outputs.docs_only != 'true'
+        timeout-minutes: 15
+        uses: ./.github/actions/btbn-ffmpeg
+        with:
+          build: gpl-shared
+          add-to-path: 'false'
+
+      - name: Test VideoWriter with x264
+        if: needs.changes.outputs.docs_only != 'true'
+        env:
+          SHOTDETECTOR_FFMPEG_LIBS: ${{ steps.gpl.outputs.bin }}
+          SHOTDETECTOR_REQUIRE_X264: '1'
+          SHOTDETECTOR_KEEP_DIFFERING: ${{ runner.temp }}/differing
+          # x264's AVX-512 code and .NET's tiered JIT in one process differ from ffmpeg about 1 run in 250 on AVX-512
+          # runners; either alone is exact (0 in 3,200 and 0 in 2,000 runs; src/FrameReader/README.md).
+          DOTNET_TieredCompilation: '0'
+        # Five times: run-to-run differences (uninitialised padding once) showed up in 1 run in 8.
+        run: |
+          mkdir -p "$RUNNER_TEMP/differing"
+          dotnet build tests/FrameReader.Tests -v q > /dev/null
+          for i in 1 2 3 4 5; do dotnet test tests/FrameReader.Tests --no-build --filter "FullyQualifiedName~VideoWriter" --logger GitHubActions; done
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: failure()
+        with:
+          name: videowriter-differing
+          path: ${{ runner.temp }}/differing/
+
+      # ImageEncoder's files byte for byte against ffmpeg's: only with an executable of the libraries' own build (the
+      # main test run has BtbN's static ffmpeg beside our libraries, so it skips them), here BtbN's shared one.
+      - name: Test ImageEncoder against its own build's ffmpeg
+        if: needs.changes.outputs.docs_only != 'true'
+        env:
+          SHOTDETECTOR_FFMPEG_LIBS: ${{ steps.gpl.outputs.bin }}
+          SHOTDETECTOR_REQUIRE_SAME_BUILD: '1'
+        run: dotnet test tests/FrameReader.Tests --no-build --filter "FullyQualifiedName~ImageEncoder" --logger GitHubActions
+
+      - name: The benchmarks build
+        if: needs.changes.outputs.docs_only != 'true'
+        run: dotnet build benchmarks/FrameReader.Benchmarks -v q
+
+      - name: Pack
+        if: needs.changes.outputs.docs_only != 'true'
+        run: dotnet pack src/FrameReader --output artifacts
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: needs.changes.outputs.docs_only != 'true'
+        with:
+          name: nupkg
+          path: artifacts/*.nupkg
+
+  # Code style (StyleBro, rules in .editorconfig), on Windows, where the code is written.
+  format:
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.docs_only != 'true'
+    runs-on: windows-2025
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Code style (StyleBro)
+        run: |
+          dotnet tool restore > /dev/null
+          dotnet tool run bro format FrameReader.slnx --verify-no-changes
+
+  # ARM (linux-arm64): the whole suite with our linux-arm64 FFmpeg build.
+  native-arm:
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.docs_only != 'true'
+    uses: ./.github/workflows/native.yml
+    with:
+      rids: '["linux-arm64"]'
+
+  arm:
+    needs: [changes, native-arm]
+    if: github.event_name == 'pull_request' && needs.changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-26.04-arm
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: native-linux-arm64
+          path: native/linux-arm64
+
+      - name: FFmpeg 8.1 (BtbN's static arm64 build)
+        id: ffmpeg
+        timeout-minutes: 15
+        uses: ./.github/actions/btbn-ffmpeg
+        with:
+          platform: linuxarm64
+
+      - name: Its executables beside our libraries
+        run: |
+          cp "${{ steps.ffmpeg.outputs.bin }}/ffmpeg" "${{ steps.ffmpeg.outputs.bin }}/ffprobe" native/linux-arm64/
+          echo "SHOTDETECTOR_FFMPEG_LIBS=$PWD/native/linux-arm64" >> "$GITHUB_ENV"
+
+      - name: Test
+        run: dotnet test FrameReader.slnx --logger GitHubActions
+
+  # Alpine (musl), with Alpine's own ffmpeg. The image by digest (10.0-alpine; Dependabot doesn't update container
+  # images: move it by hand).
+  alpine:
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    container: mcr.microsoft.com/dotnet/sdk:10.0-alpine@sha256:5562fd626eec39f6f53218f9b7d7856ab7195d51d846568304fbe85071a3b6e6
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install ffmpeg
+        timeout-minutes: 10   # package mirrors sometimes hang
+        run: apk add --no-cache ffmpeg && ffmpeg -hide_banner -version | head -1
+
+      - name: Test
+        run: dotnet test FrameReader.slnx --logger GitHubActions
+
+  # The one check branch protection requires from this workflow: every job above passed or was skipped (a docs-only
+  # PR skips the heavy ones, and a skipped matrix job doesn't report its per-matrix check names).
+  passed:
+    name: CI passed
+    needs: [changes, line-endings, native, build, format, native-arm, arm, alpine]
+    if: always()
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - name: Every job passed or was skipped
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$NEEDS" | jq -e 'all(.[]; .result == "success" or .result == "skipped")' > /dev/null

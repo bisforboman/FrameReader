@@ -1,8 +1,8 @@
 # src/FrameReader: notes beside the code
 
 FrameReader's types and what it handles: README.md here. Its releases: CHANGELOG.md here (tags
-`framereader-vX.Y.Z`). ShotDetector depends on it one way, through its public API only; its tests are in
-`tests/FrameReader.Tests`.
+`vX.Y.Z`; until 2.25.0 `framereader-vX.Y.Z` in ShotDetector's repository). ShotDetector depends on its package,
+through its public API only; its tests are in `tests/FrameReader.Tests`.
 
 ## Gotchas (each cost time once)
 

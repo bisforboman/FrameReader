@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FrameReader/FrameReader.csproj" />
+    <Project Path="src/FrameReader.Native/FrameReader.Native.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FrameReader.Tests/FrameReader.Tests.csproj" />
+    <Project Path="tests/AudioWithoutFfmpeg/AudioWithoutFfmpeg.csproj" />
+  </Folder>
+</Solution>
