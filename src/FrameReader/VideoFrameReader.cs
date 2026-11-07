@@ -192,7 +192,10 @@ public sealed unsafe class VideoFrameReader : IDisposable
     {
     }
 
-    /// <summary>Opens a stream's bytes, read once (headers first: mkv, webm, ts, mov or a faststart mp4).</summary>
+    /// <summary>
+    /// Opens a stream's bytes from where it is: as a file when it can seek (a FileStream, a MemoryStream: any MP4), else
+    /// read once, as ffmpeg reads a pipe (headers first: mkv, webm, ts, mov or a faststart mp4).
+    /// </summary>
     /// <param name="stream">The media's bytes; not disposed.</param>
     /// <param name="options">Size, format and decoding; null: the frames as they are, in Bgr24.</param>
     public VideoFrameReader(Stream stream, VideoFrameReaderOptions? options = null) : this(options, o => new FrameDecoder(stream, o))

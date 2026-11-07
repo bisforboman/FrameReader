@@ -93,7 +93,10 @@ public sealed unsafe class AudioReader : IDisposable
     {
     }
 
-    /// <summary>Opens a stream's bytes, read once (headers first).</summary>
+    /// <summary>
+    /// Opens a stream's bytes from where it is: as a file when it can seek (a FileStream, a MemoryStream), else read once,
+    /// as ffmpeg reads a pipe (headers first).
+    /// </summary>
     /// <param name="stream">The media's bytes; not disposed.</param>
     /// <param name="options">Rate, channels, libraries; null: the stream as it is.</param>
     public AudioReader(Stream stream, AudioReaderOptions? options = null) : this("pipe:0", options, new StreamInput([], stream))

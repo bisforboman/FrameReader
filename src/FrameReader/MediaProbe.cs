@@ -16,8 +16,9 @@ public static unsafe class MediaProbe
     public static MediaInfo Probe(string path, ProbeOptions? options = null) => Probe(path, null, options);
 
     /// <summary>
-    /// Probes the bytes a stream gives, read once from where it is (not seekable, as ffprobe reads a pipe): the headers
-    /// must come first (mkv, webm, ts, mov or a faststart mp4).
+    /// Probes the bytes a stream gives, from where it is: as ffprobe reads a file when the stream can seek (a FileStream,
+    /// a MemoryStream: any MP4), else read once, as ffprobe reads a pipe, with the headers first (mkv, webm, ts, mov or a
+    /// faststart mp4).
     /// </summary>
     /// <param name="stream">The media's bytes.</param>
     /// <param name="options">What else to read; null: the headers only.</param>
