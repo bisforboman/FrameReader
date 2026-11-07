@@ -63,6 +63,13 @@ public sealed unsafe class FrameDecoder : IDisposable
     AVFrame* _oriented;
     bool _swapped;
 
+    // The oriented frame's buffers while a DecodedFrame or ReadAhead holds the last one: from a pool rather than a fresh
+    // allocation a frame, laid out as av_frame_get_buffer laid out the first one of the size.
+    AVBufferPool* _orientedPool;
+    (int Format, int Width, int Height) _pooled;
+    int_array4 _pooledLinesize;
+    long_array4 _pooledOffset; // of each plane in the buffer, -1 for none
+
     readonly StreamInput? _io;
 
     /// <summary>What reading a Stream input threw, if it did.</summary>
@@ -449,9 +456,7 @@ public sealed unsafe class FrameDecoder : IDisposable
         if (_oriented->width != ow || _oriented->height != oh || _oriented->format != _frame->format
             || ffmpeg.av_frame_is_writable(_oriented) == 0) // a DecodedFrame still holds the last one
         {
-            ffmpeg.av_frame_unref(_oriented);
-            (_oriented->format, _oriented->width, _oriented->height) = (_frame->format, ow, oh);
-            Check(ffmpeg.av_frame_get_buffer(_oriented, 64), "rotate");
+            OrientedBuffer(ow, oh);
         }
 
         ffmpeg.av_frame_side_data_free(&_oriented->side_data, &_oriented->nb_side_data);
@@ -494,6 +499,47 @@ public sealed unsafe class FrameDecoder : IDisposable
                 else
                     Buffer.MemoryCopy(s, d, opw * bytes, opw * bytes);
             }
+        }
+    }
+
+    void OrientedBuffer(int ow, int oh)
+    {
+        ffmpeg.av_frame_unref(_oriented);
+        (_oriented->format, _oriented->width, _oriented->height) = (_frame->format, ow, oh);
+        if (_orientedPool != null && _pooled == (_frame->format, ow, oh))
+        {
+            var buf = ffmpeg.av_buffer_pool_get(_orientedPool);
+            if (buf == null)
+                Check(ffmpeg.AVERROR(ffmpeg.ENOMEM), "rotate");
+            _oriented->buf[0] = buf;
+            for (uint i = 0; i < 4; i++)
+            {
+                _oriented->linesize[i] = _pooledLinesize[i];
+                _oriented->data[i] = _pooledOffset[i] < 0 ? null : buf->data + _pooledOffset[i];
+            }
+
+            _oriented->extended_data = (byte**)&_oriented->data;
+            return;
+        }
+
+        Check(ffmpeg.av_frame_get_buffer(_oriented, 64), "rotate");
+        if (_orientedPool != null)
+        {
+            var pool = _orientedPool;
+            ffmpeg.av_buffer_pool_uninit(&pool); // freed once the frames holding its buffers are
+            _orientedPool = null;
+        }
+
+        // One buffer for every plane (FFmpeg's layout for video), else no pool.
+        var first = _oriented->buf[0];
+        if (first == null || _oriented->buf[1] != null)
+            return;
+        _orientedPool = ffmpeg.av_buffer_pool_init(first->size, null);
+        _pooled = (_frame->format, ow, oh);
+        for (uint i = 0; i < 4; i++)
+        {
+            _pooledLinesize[i] = _oriented->linesize[i];
+            _pooledOffset[i] = _oriented->data[i] == null ? -1 : _oriented->data[i] - first->data;
         }
     }
 
@@ -1246,6 +1292,13 @@ public sealed unsafe class FrameDecoder : IDisposable
             var f = _frame;
             ffmpeg.av_frame_free(&f);
             _frame = null;
+        }
+
+        if (_orientedPool != null)
+        {
+            var pool = _orientedPool;
+            ffmpeg.av_buffer_pool_uninit(&pool); // freed once the frames holding its buffers are
+            _orientedPool = null;
         }
 
         if (_oriented != null)
