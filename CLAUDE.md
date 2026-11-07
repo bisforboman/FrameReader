@@ -29,8 +29,8 @@ released, and a breaking change is a major version.
   merged, never stacked. Release notes are the version's CHANGELOG section: keep sections grouped (breaking changes,
   new, faster, fixed). A change to the native build is a release too.
 - Merging it releases: release.yml (every push to main) releases the newest version if it isn't tagged (`vX.Y.Z`; the
-  releases made from ShotDetector's repository were `framereader-vX.Y.Z` there and are `vX.Y.Z` here,
-  .github/imported-tags.txt). A hand-pushed `v*` tag still works. Pass `-p:FrameReaderVersion`.
+  releases made from ShotDetector's repository, `framereader-vX.Y.Z` there, count as released here:
+  .github/imported-tags.txt, which also says how to push them as tags). A hand-pushed `v*` tag still works. Pass `-p:FrameReaderVersion`.
 - Prereleases (`-`) publish without approval (environment `prerelease`); stable ones wait for the owner's approval
   (environment `release`).
 - Once a stable release is on nuget.org, set `FrameReaderApiBaselineVersion` in Directory.Build.props (release.yml
