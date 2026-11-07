@@ -93,7 +93,8 @@ released, and a breaking change is a major version.
 - `tools/`: `native/build-ffmpeg.sh`, `changelog.py`, `media.py` (pinned real-world media), `nightly-issue.sh`,
   `vulnerable-packages.py`.
 - `.github/workflows`: `ci.yml`, `release.yml`, `native.yml` (our FFmpeg build, which the others call),
-  `realworld-audio.yml` (nightly), `frame-reader-bench.yml` (weekly), `codeql.yml`, `dependabot-auto-merge.yml`,
+  `realworld-audio.yml` (nightly), `frame-reader-bench.yml` (weekly), `upstream.yml` (weekly: an issue per newer
+  FFmpeg, linked library, BtbN build or StyleBro), `codeql.yml`, `dependabot-auto-merge.yml`,
   `vulnerable-packages.yml` (weekly). Each header says the rest.
 
 ## Gotchas
