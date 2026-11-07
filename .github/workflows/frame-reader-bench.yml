@@ -1,8 +1,10 @@
 name: FrameReader benchmark
 
 # FrameReader vs FFMpegCore's raw-video pipe vs the ffmpeg executable, reading the first 500 frames of three films as
-# whole Bgr24 frames and as 160x90 Gray8 (benchmarks/FrameReader.Benchmarks, BenchmarkDotNet). On demand and weekly
-# (not on PRs: two runners for half an hour each); results in the run's summary.
+# whole Bgr24 frames and as 160x90 Gray8 (ReadFrames), and FrameReader's own paths: rotated, scaled and Yuv420p reads
+# (ReadPaths), a picture a second (Sampling), the audio analyses (AudioAnalyses) and the managed measures on generated
+# frames and samples (PictureMeasures, AudioMeasures) (benchmarks/FrameReader.Benchmarks, BenchmarkDotNet). On demand
+# and weekly (not on PRs: two runners for about an hour each); results in the run's summary, one table per class.
 on:
   workflow_dispatch:
   schedule:
@@ -27,7 +29,7 @@ jobs:
           - { rid: linux-x64, os: ubuntu-26.04, btbn: linux64 }
           - { rid: linux-arm64, os: ubuntu-26.04-arm, btbn: linuxarm64 }
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -68,8 +70,11 @@ jobs:
           export BENCH_VIDEOS="$(for f in $films; do printf '%s;' "$PWD/samples/realworld/$f"; done)"
           dotnet run -c Release --project benchmarks/FrameReader.Benchmarks -- --filter '*' --exporters github
           {
-            echo "### ${{ matrix.rid }}: $(nproc) CPUs ($(lscpu | sed -n 's/^Model name: *//p' | head -1)), first 500 frames"
-            cat BenchmarkDotNet.Artifacts/results/*-report-github.md
+            echo "### ${{ matrix.rid }}: $(nproc) CPUs ($(lscpu | sed -n 's/^Model name: *//p' | head -1))"
+            for report in BenchmarkDotNet.Artifacts/results/*-report-github.md; do
+              echo "#### $(basename "$report" -report-github.md)"
+              cat "$report"
+            done
           } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
