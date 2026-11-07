@@ -598,7 +598,8 @@ and 4:4:4, odd sizes.
 counts (its RGB conversions clip): each pixel's R, G and B from its Y and the chroma sample it is sited on, by the
 matrix's Kr and Kb (`GamutOptions.Matrix`; `Coefficients(colorSpace)` for ffprobe's color_space; else BT.709, BT.601
 under 720 lines), a frame's share of those outside `Low` to `High` in `Shares`. A table of each chroma pair's run of Y
-codes in gamut makes a pixel one lookup; 8 to 12 bits. Checked against a geq expression doing the same arithmetic per
+codes in gamut makes a pixel one lookup, built once for each depth, range, limits and matrix and shared by the
+meters made with them; 8 to 12 bits. Checked against a geq expression doing the same arithmetic per
 pixel, and signalstats' YAVG of its mask, at 8 and 10 bits, 4:2:0, 4:2:2 and 4:4:4, limited and full range.
 
 Test media without the ffmpeg executable: `TestMedia.Write(path, options)` makes a synthetic clip from FFmpeg's own

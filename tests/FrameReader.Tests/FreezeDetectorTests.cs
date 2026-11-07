@@ -5,7 +5,7 @@ using FrameReader;
 /// <summary>
 /// FreezeDetector is FFmpeg 8.1's freezedetect: on decoded clips with still pictures (a clean one, one under light noise
 /// that n tells apart, one running to the end, short ones under d), the spans' times print as freezedetect's log lines
-/// (freeze_start, freeze_duration, freeze_end) at several n and d, in 8 and 10 bits, 4:2:0, 4:2:2, gray and NV12, odd sizes
+/// (freeze_start, freeze_duration, freeze_end) at several n and d, in 8, 10 and 16 bits, 4:2:0, 4:2:2, 4:4:4, gray and NV12, odd sizes
 /// (the chroma's last row left out, as freezedetect sizes it).
 /// </summary>
 public class FreezeDetectorTests
@@ -23,6 +23,7 @@ public class FreezeDetectorTests
     [InlineData("gray", "160x91", "-c:v ffv1")]
     [InlineData("nv12", "160x90", "-c:v rawvideo")]
     [InlineData("yuv420p", "161x91", "-c:v libx264 -bf 2 -crf 30")]
+    [InlineData("yuv444p16le", "203x67", "-c:v ffv1")]
     public void IsFfmpegsFreezedetect(string format, string size, string encode)
     {
         if (Libs is null)
@@ -146,6 +147,44 @@ public class FreezeDetectorTests
         finally
         {
             Directory.Delete(dir, true);
+        }
+    }
+
+    // scene_sad's vector paths (psadbw, ARM's pairwise adds, the 16-bit lanes' runs) against the plain sum: every row length
+    // around the vectors' widths, random samples and the largest differences.
+    [Fact]
+    public void SadsAreThePlainSums()
+    {
+        var random = new Random(7);
+        for (int n = 0; n <= 300; n++)
+        {
+            var a = new byte[n];
+            var b = new byte[n];
+            random.NextBytes(a);
+            random.NextBytes(b);
+            Assert.Equal(Plain(a, b), FreezeDetector.Sad(a, b));
+            Assert.Equal((ulong)(255 * n), FreezeDetector.Sad(new byte[n], [.. Enumerable.Repeat((byte)255, n)]));
+
+            var c = new ushort[n];
+            var d = new ushort[n];
+            for (int i = 0; i < n; i++)
+                (c[i], d[i]) = ((ushort)random.Next(65536), (ushort)random.Next(65536));
+            Assert.Equal(Plain(c, d), FreezeDetector.Sad(c, d));
+            Assert.Equal((ulong)(65535 * n), FreezeDetector.Sad([.. Enumerable.Repeat((ushort)65535, n)], new ushort[n]));
+        }
+
+        // A 16-bit row longer than a 32-bit lane's run, at the largest difference: summed in 64 bits.
+        const int Long = 300_001;
+        Assert.Equal(65535UL * Long, FreezeDetector.Sad([.. Enumerable.Repeat((ushort)65535, Long)], new ushort[Long]));
+        Assert.Equal(255UL * Long, FreezeDetector.Sad(new byte[Long], [.. Enumerable.Repeat((byte)255, Long)]));
+
+        static ulong Plain<T>(T[] x, T[] y)
+            where T : System.Numerics.IBinaryInteger<T>
+        {
+            ulong sum = 0;
+            for (int i = 0; i < x.Length; i++)
+                sum += ulong.CreateChecked(x[i] > y[i] ? x[i] - y[i] : y[i] - x[i]);
+            return sum;
         }
     }
 
