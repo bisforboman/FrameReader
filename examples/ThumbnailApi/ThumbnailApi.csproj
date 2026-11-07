@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    An ASP.NET Core minimal API that turns an uploaded video into a JPEG thumbnail and its duration, in memory, with no
+    temporary file and no ffmpeg process (README.md here; docs/coming-from-ffmpegcore.md). In FrameReader.slnx so CI
+    builds and formats it. In your own app, reference the packages instead of the project:
+      <PackageReference Include="FrameReader" Version="..." />
+      <PackageReference Include="FrameReader.Native.linux-x64" Version="..." />   (or FrameReader.Native: every platform)
+  -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\FrameReader\FrameReader.csproj" />
+  </ItemGroup>
+
+</Project>
