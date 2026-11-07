@@ -91,7 +91,7 @@ released, and a breaking change is a major version.
   on samples load anything of FFmpeg.
 - `benchmarks/FrameReader.Benchmarks`: against FFMpegCore and the ffmpeg executable (frame-reader-bench.yml).
 - `tools/`: `native/build-ffmpeg.sh`, `changelog.py`, `media.py` (pinned real-world media), `nightly-issue.sh`,
-  `vulnerable-packages.py`.
+  `vulnerable-packages.py`, `true_peak_reference.py` (LoudnessMeterTests' reference true peaks).
 - `.github/workflows`: `ci.yml`, `release.yml`, `native.yml` (our FFmpeg build, which the others call),
   `realworld-audio.yml` (nightly), `frame-reader-bench.yml` (weekly), `upstream.yml` (weekly: an issue per newer
   FFmpeg, linked library, BtbN build or StyleBro), `codeql.yml`, `dependabot-auto-merge.yml`,
