@@ -11,10 +11,6 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
 
 ## Next
 
-- AudioAnalysis: the loudness graph on its own thread, fed references of the decoded frames, while the caller's thread converts for the other analyses
-  - Why: ebur128 with true peaks (192 kHz inside the filter) and the conversion for tone, waveform and silences run one after the other on one thread; up to twice as fast when loudness and another analysis are asked for (docs/decisions/2026-11-07-performance-work.md)
-  - Status: In progress (a cloud session, 2026-11-07)
-
 - The first release from this repository: a prerelease (2.26.0-pre), then the next stable version
   - Why: checks the nuget.org trusted publishing policy for this repository, the environments and the native packages before a stable release depends on them (ShotDetector's docs/framereader-split.md, step 5)
   - Status: Open (waits on the owner's settings, below)
@@ -96,7 +92,7 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
   - Status: Maybe
 
 - AudioFilter's output nobody reads: Loudness drains its graph without the `aformat` tail, the copy and the metadata strings
-  - Why: `Loudness.Measure` and AudioAnalysis's loudness convert ebur128's doubles to floats, copy every frame and turn its metadata into strings, then drop them; ebur128's figures don't depend on what follows it (docs/decisions/2026-11-07-performance-work.md)
+  - Why: `Loudness.Measure` converts ebur128's doubles to floats, copies every frame and turns its metadata into strings, then drops them; ebur128's figures don't depend on what follows it. AudioAnalysis's loudness drains without the copy and the strings since `AudioFilter.Drain` (2026-11-07); both keep the `aformat` tail (docs/decisions/2026-11-07-performance-work.md)
   - Status: Maybe
 
 - The 8-bit picture meters' leftovers: Luma8 and BlackPixels on Vector256, ContentLines from Luma8's row sums, ConstantColourDetector's flat frames histogrammed once, InterlaceDetector holding frame references instead of copies

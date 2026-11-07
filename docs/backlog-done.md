@@ -14,3 +14,7 @@ are in [ShotDetector's backlog-done.md](https://github.com/bisforboman/shotdetec
 - Faster measures: GamutMeter's table, FreezeDetector's SAD, TruePeakMeter's interpolation
   - Why: GamutMeter rebuilds its table for every meter (64 MB and most of a second at 12 bits); FreezeDetector's sum of differences widens bytes three times and is scalar above 8 bits (much slower at 10 bits than at 8); TruePeakMeter interpolates one point at a time. Integer sums, a cache, and vectors that keep each point's order: the same results (docs/decisions/2026-11-07-performance-work.md)
   - Status: Done (2026-11-07)
+
+- AudioAnalysis: the loudness graph on its own thread, fed references of the decoded frames, while the caller's thread converts for the other analyses
+  - Why: ebur128 with true peaks (192 kHz inside the filter) and the conversion for tone, waveform and silences run one after the other on one thread; up to twice as fast when loudness and another analysis are asked for (docs/decisions/2026-11-07-performance-work.md)
+  - Status: Done (2026-11-07): the pass takes about as long as loudness alone (docs/decisions/2026-11-07-audio-analysis-loudness-thread.md)
