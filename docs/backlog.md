@@ -11,10 +11,6 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
 
 ## Next
 
-- Vectorise FrameDecoder's rotation: `Orient`'s hflip and transpose with Vector128 shuffles and blocks, and a buffer pool for its output
-  - Why: a display rotation of 90 or 270 degrees (phone video) moves one sample at a time; at 1080p that costs more than decoding the frame, and the rotated read of ReadPaths takes about twice the plain one (docs/decisions/2026-11-07-performance-work.md)
-  - Status: In progress (a cloud session, 2026-11-07)
-
 - AudioAnalysis: the loudness graph on its own thread, fed references of the decoded frames, while the caller's thread converts for the other analyses
   - Why: ebur128 with true peaks (192 kHz inside the filter) and the conversion for tone, waveform and silences run one after the other on one thread; up to twice as fast when loudness and another analysis are asked for (docs/decisions/2026-11-07-performance-work.md)
   - Status: In progress (a cloud session, 2026-11-07)
