@@ -507,7 +507,9 @@ largest value, truncated; the finder takes floats, as FFmpeg's decoders give AAC
 Several analyses on one decode: `AudioAnalysis.Run(audioReader, options)` runs reference tone, the waveform, loudness
 and silences (each one given its options) over one pass of the reader, each result the one its own call gives on a
 reader opened with the same options, to the bit. Loudness reads the decoded audio, as `Loudness.Measure` does; the
-others the reader's chunks, at its rate and channels. `Chunks` hands the same chunks to your own analysis. A tone search
+others the reader's chunks, at its rate and channels; with loudness and any other, the loudness graph runs on a thread
+of its own beside the conversion, so the pass takes about as long as the slower of the two. `Chunks` hands the same
+chunks to your own analysis (on the calling thread). A tone search
 alone stops decoding where `ReferenceTone.Find` stops; bad options fail before reading. Conversion stays its own pass,
 since a notch for the tone needs to know where the tone is:
 
