@@ -15,4 +15,5 @@ dotnet add package FrameReader.Native.linux-x64   # FFmpeg's libraries for your 
 
 FrameReader began as [ShotDetector](https://github.com/bisforboman/shotdetector)'s in-process decoding and lived in
 its repository until 2026-11-07; its history came with it. MIT ([LICENSE](LICENSE)); FFmpeg's libraries, in the
-FrameReader.Native packages, are LGPL-2.1-or-later and loaded dynamically.
+FrameReader.Native packages, are LGPL-2.1-or-later and loaded dynamically; what they link in:
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
