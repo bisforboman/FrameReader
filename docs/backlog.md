@@ -1,0 +1,68 @@
+# Backlog
+
+What FrameReader does next, in priority order. Three sections: **Next** (open work, the first row first),
+**Waiting** (rows that wait on the owner or an outside event) and **Maybe** (ideas not committed to). Update a status
+when work starts or lands; add an item when a gap turns up, with why it matters. A row moves to
+[backlog-done.md](backlog-done.md) when it is Done, Dropped or Won't do. Design questions go to
+[decisions/](decisions/).
+
+Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md): **Released** (on nuget.org),
+**Done** (on `main`, in the next release), **Dropped**, **Won't do**.
+
+## Next
+
+- The first release from this repository: a prerelease (2.26.0-pre), then the next stable version
+  - Why: checks the nuget.org trusted publishing policy for this repository, the environments and the native packages before a stable release depends on them (ShotDetector's docs/framereader-split.md, step 5)
+  - Status: Open (waits on the owner's settings, below)
+
+- The ShotDetector parity check on pull requests: pack the PR's FrameReader to a local feed, build ShotDetector's main against it, run its tests and its scenedetect comparison
+  - Why: since the move a FrameReader change reaches ShotDetector's comparison only once released; this catches a change that moves ShotDetector's results before it merges (ShotDetector's docs/framereader-split.md, step 4). Needs ShotDetector to take FrameReader as a package with an overridable version (its step 6) first
+  - Status: Open
+
+- The mutation entries for FrameReader's quirks: Invoke-Mutations.ps1 and the entries of ShotDetector's tools/mutation/mutations.psd1 whose Project is tests/FrameReader.Tests, with a workflow
+  - Why: each reproduced ffmpeg quirk keeps a test that fails when its guard is broken; in ShotDetector's repository those entries no longer find their files
+  - Status: Open
+
+- Windows and macOS: the tests on CI's Windows and macOS runners, informational, as ShotDetector's parity-os.yml ran them
+  - Why: only Linux (x64, ARM, musl) runs the tests here; the Windows struct-layout gotcha (src/FrameReader/CLAUDE.md) shows platform-only bugs exist
+  - Status: Open
+
+- Rename the test environment variables from `SHOTDETECTOR_*` to `FRAMEREADER_*` (FFMPEG_LIBS, REQUIRE_X264, REQUIRE_SAME_BUILD, KEEP_DIFFERING, WIDEVINE_PSSH*, REALWORLD_AUDIO)
+  - Why: names from ShotDetector's repository; kept for the move so nothing else changed. Rename in the tests, the workflows, the session-start hook and CLAUDE.md in one PR
+  - Status: Open
+
+- At the next change to tools/native/build-ffmpeg.sh: its SBOM's documentNamespace to this repository's URL
+  - Why: it still names github.com/bisforboman/shotdetector; any edit to the script rebuilds every platform's FFmpeg (the cache key), so it waits for a change that needs a rebuild anyway
+  - Status: Open
+
+## Waiting
+
+- The owner sets up the repository: branch protection on main (required checks `build` and `CI passed`), auto-merge, the environments `release` (with approval) and `prerelease`, the `NUGET_USER` variable, the nuget.org trusted publishing policy (workflow `release.yml`, package glob `FrameReader*`), and the transfer of ShotDetector's open `framereader` issues
+  - Why: a session can't change repository settings, nuget.org or another repository's issues
+  - Status: Waiting (on the owner)
+
+- Move to FFmpeg 9's libraries (FFmpeg.AutoGen 9, Native packages on 9.0.x) when opencv-python's Linux wheels bundle FFmpeg 9
+  - Why: ShotDetector's scenedetect parity needs OpenCV's FFmpeg; moving earlier risks bytes OpenCV doesn't give, and drops system FFmpeg 8 in-process. ShotDetector's backlog has the same row
+  - Status: Waiting (2026-10-14: FFmpeg.AutoGen 9.0.1.1 is out; opencv-python still bundles libavcodec 62; the owner: wait for OpenCV)
+
+- The owner files the FFmpeg yadif report (docs/ffmpeg-yadif-16bit-report.md)
+  - Why: FFmpeg 8.1's x86 yadif at 9-16 bits races between slice threads, so every run gives another picture; FrameReader runs it on one thread there, which a fix upstream would make unneeded. A public post from the owner's account: theirs to file, never a session's
+  - Status: Waiting (on the owner)
+
+- The owner files the x264 AVX-512 report with VideoLAN
+  - Why: CI's VideoWriter step needs DOTNET_TieredCompilation=0 because x264's AVX-512 code and .NET's tiered JIT differ about 1 run in 250 (docs/decisions/2026-10-10-videowriter-s-rare-ci-mismatch.md). A public post from the owner's account
+  - Status: Waiting (on the owner)
+
+## Maybe
+
+- Read-ahead: convert ahead too, for TryRead
+  - Why: `VideoFrameReaderOptions.ReadAhead` (#568, ShotDetector issue #566) decodes, deinterlaces and rotates frames ahead on a background thread but converts each frame in the read, because `TryReadForwardTo` only knows which frame it wants when asked. Plain `TryRead` wants every frame, so its conversion could run ahead too
+  - Status: Maybe (the owner, 2026-10-28)
+
+- Segment decoders inside `ReadAhead`: several decoders on different parts of the file
+  - Why: ffmpeg caps frame threads at 16, so above that cores sit idle; issue #566's own run with 4 `ReadAt` readers shows the gain. Pays only above ~16 cores
+  - Status: Maybe
+
+- release.yml: a run waiting for approval and the pushes after it
+  - Why: GitHub keeps one pending run per concurrency group and cancels the older pending one, whatever it would have released (2026-11-06, in ShotDetector's repository). The skip guard makes a lost version fail the next run, but a run that sits in approval for days could leave the queue
+  - Status: Maybe

@@ -11,8 +11,8 @@
     <authors>$authors$</authors>
     <description>FFmpeg's shared libraries for FrameReader and ShotDetector on every platform: depends on FrameReader.Native.win-x64, linux-x64, linux-arm64, linux-musl-x64 and osx-arm64 at this version. A publish for one runtime (-r linux-x64) copies only that platform's libraries; reference a single FrameReader.Native.&lt;rid&gt; to keep a build small. LGPL-2.1-or-later, as FFmpeg.</description>
     <license type="expression">LGPL-2.1-or-later</license>
-    <projectUrl>https://github.com/bisforboman/shotdetector</projectUrl>
-    <repository type="git" url="https://github.com/bisforboman/shotdetector" />
+    <projectUrl>https://github.com/bisforboman/FrameReader</projectUrl>
+    <repository type="git" url="https://github.com/bisforboman/FrameReader" />
     <icon>icon.png</icon>
     <readme>README.md</readme>
     <tags>video audio ffmpeg native scene-detection</tags>

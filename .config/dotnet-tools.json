@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "isRoot": true,
+  "tools": {
+    "stylebro.tool": {
+      "version": "0.8.0-alpha.1",
+      "commands": [
+        "bro"
+      ],
+      "rollForward": false
+    }
+  }
+}

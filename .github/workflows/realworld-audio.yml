@@ -1,0 +1,79 @@
+name: Real world audio
+
+# AudioReader and SpectralStats on real films' own audio (AAC at 44.1 and 48 kHz, MP3, Opus, Vorbis) against ffmpeg's
+# command line (tests/FrameReader.Tests/RealWorldAudioTests.cs), one file after another in one job. Libraries and
+# executable from one FFmpeg 8.1 build. The files are pinned by SHA-256 (tools/media.py).
+# Nightly and on demand, so a new ffmpeg that changes a result is noticed the next morning; a failed night opens an
+# issue (or comments on the open one).
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 2 * * *'
+
+concurrency:
+  group: realworld-audio-${{ github.ref }}
+  cancel-in-progress: true
+
+# The token only reads the repository.
+permissions:
+  contents: read
+
+jobs:
+  audio:
+    name: Real world audio
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    env:
+      FILMS: bbb_640x360_h264.mp4 elephants_dream_426x240_h264.mp4 tears_of_steel_1280x534_h264.mov   # AAC 44.1 and 48 kHz, MP3
+      OPUS: elephants_dream_1920x1080_vp9.webm going_some_1909.opus maple_leaf_rag.ogg   # 5.1 Opus (Commons' copy, Matroska's ms timestamps); stereo Opus; stereo Vorbis
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: FFmpeg 8.1, shared
+        id: ffmpeg
+        timeout-minutes: 15
+        uses: ./.github/actions/btbn-ffmpeg
+        with:
+          build: gpl-shared
+          add-to-path: 'false'
+
+      - name: Cache the media
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: samples/realworld
+          key: realworld-audio-${{ hashFiles('tools/media.py') }}
+
+      - name: Compare with ffmpeg
+        env:
+          SHOTDETECTOR_FFMPEG_LIBS: ${{ steps.ffmpeg.outputs.bin }}
+        run: |
+          dotnet build tests/FrameReader.Tests -v q > /dev/null
+          status=0
+          for f in $FILMS $OPUS; do
+            echo "::group::$f"
+            export SHOTDETECTOR_REALWORLD_AUDIO=$(python3 tools/media.py "$f" --download | tail -1)
+            if dotnet test tests/FrameReader.Tests --no-build --filter "FullyQualifiedName~RealWorldAudio" --logger GitHubActions; then r=identical; else r=DIFFERS; status=1; fi
+            echo "::endgroup::"
+            echo "| $f | $r |" >> results.md
+          done
+          { echo "### Real world audio"; echo; echo "| File | AudioReader, SpectralStats vs ffmpeg |"; echo "|---|---|"; cat results.md; } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+
+  # A failed night: an issue, or a comment on the one still open, so it isn't missed (tools/nightly-issue.sh).
+  report:
+    needs: audio
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: tools/nightly-issue.sh "Nightly real-world audio comparison failed" "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

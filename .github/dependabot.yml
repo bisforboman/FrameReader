@@ -1,0 +1,32 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    # The workflows and our composite actions (their pins too).
+    directories: ["/", "/.github/actions/*"]
+    schedule:
+      interval: weekly
+    # One PR a week instead of one per action (each is a full CI run): minor and patch updates together, which
+    # dependabot-auto-merge.yml merges once green, and majors together, which wait for a look.
+    groups:
+      actions:
+        patterns: ["*"]
+        update-types: [minor, patch]
+      actions-major:
+        patterns: ["*"]
+        update-types: [major]
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    # The analyzers (Directory.Packages.props) and the format tool (.config/dotnet-tools.json) move together. While
+    # StyleBro is a prerelease (0.x.0-alpha.N) Dependabot never proposes its next version: from a prerelease, NuGet's
+    # updater only offers prereleases of the same version (0.7.0-alpha.2) or a stable release, and no setting here
+    # changes that. upstream.yml's weekly check files an issue for those instead.
+    groups:
+      stylebro:
+        patterns: ["StyleBro.*"]
+    # FFmpeg.AutoGen stays on 8.x until the native build moves to FFmpeg 9 (docs/backlog.md, Waiting): its 9.x binds
+    # libavcodec 63, which our FFmpeg 8 libraries aren't.
+    ignore:
+      - dependency-name: FFmpeg.AutoGen
+        versions: [">= 9.0.0"]

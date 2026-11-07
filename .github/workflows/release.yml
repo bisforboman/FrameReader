@@ -1,0 +1,254 @@
+name: Release
+
+# Merging a release PR releases: src/FrameReader/CHANGELOG.md's newest version ("## X.Y.Z – date"), tag vX.Y.Z, as
+# FrameReader and FrameReader.Native.<rid> (and the meta-package) on nuget.org and a GitHub release.
+# On every push to main, the newest version is released if it isn't tagged yet. A prerelease (a '-' in the version)
+# uses the 'prerelease' environment, others 'release', which waits for approval. Pushing a v* tag by hand still
+# releases that version.
+# Only the newest version can be released from main, so the run fails when an older stable version newer than the
+# newest tag is untagged (a release PR merged while the one before it still waited): see the version job.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+# One release at a time, never cancelled half way.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+# The default token for every job: read the repository, nothing else (jobs that need more say so).
+permissions:
+  contents: read
+
+jobs:
+  # The releases made from github.com/bisforboman/shotdetector (tags framereader-vX.Y.Z there), tagged vX.Y.Z here
+  # on the commits git filter-repo carried over (.github/imported-tags.txt): created once, before the version job
+  # looks for the newest tag. Through the API, as a tag pushed with this token starts no workflow.
+  tags:
+    if: github.ref_type == 'branch'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: The imported tags
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          grep -v '^#' .github/imported-tags.txt | while read -r tag sha; do
+            git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null && continue
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$tag" -f "sha=$sha" > /dev/null
+            echo "Tagged $tag at $sha" | tee -a "$GITHUB_STEP_SUMMARY"
+          done
+
+  # The version, and whether it still needs releasing (most pushes to main: no, and nothing else runs).
+  version:
+    needs: tags
+    if: always() && (needs.tags.result == 'success' || needs.tags.result == 'skipped')
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.version.outputs.release }}
+      environment: ${{ steps.version.outputs.environment }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - id: version
+        run: |
+          log=src/FrameReader/CHANGELOG.md
+          v=$(grep -m1 -oE '^## [0-9]+\.[0-9]+\.[0-9]+[^ ]*' "$log" | cut -c4-)
+          due=false
+          case "$GITHUB_REF_TYPE/$GITHUB_REF_NAME" in
+            tag/v*) v="${GITHUB_REF_NAME#v}"; due=true ;;
+            *)
+              git ls-remote --exit-code --tags origin "refs/tags/v$v" > /dev/null || due=true
+              # Never skip a stable version silently: each run releases the newest version only, so an older one newer
+              # than the newest tag (approved after the next release PR merged, or its run cancelled) would never be
+              # published. Fail naming it instead (2026-11-06: 2.24.0 went out only in 2.25.0).
+              tags=$(git ls-remote --tags origin 'refs/tags/v*' | sed -E 's|.*refs/tags/||; s|\^\{\}$||' \
+                | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sed 's|^v||' | sort -uV)
+              newest_tag=$(tail -n1 <<< "$tags")
+              bad=0
+              for old in $(grep -oE '^## [0-9]+\.[0-9]+\.[0-9]+( |$)' "$log" | cut -c4- | tr -d ' '); do
+                [ "$old" != "$v" ] || continue
+                [ -z "$newest_tag" ] || [ "$(printf '%s\n%s\n' "$newest_tag" "$old" | sort -V | tail -n1)" != "$newest_tag" ] || continue
+                grep -qxF "$old" <<< "$tags" && continue
+                msg="$old is in $log but untagged and older than $v, which this run would release: $old would never be published. Tag $old's release commit by hand (v$old) to release it first, or, to leave it out on purpose, tag $v's release commit by hand (v$v)."
+                echo "::error::$msg"; echo "**Skipped:** $msg" >> "$GITHUB_STEP_SUMMARY"
+                bad=1
+              done
+              [ "$bad" = 0 ] || exit 1 ;;
+          esac
+          env=release; [[ "$v" == *-* ]] && env=prerelease
+          if [ "$due" = true ]; then echo "Releasing FrameReader $v" >> "$GITHUB_STEP_SUMMARY"; else echo "FrameReader $v is already released" >> "$GITHUB_STEP_SUMMARY"; fi
+          { echo "version=$v"; echo "release=$due"; echo "environment=$env"; } >> "$GITHUB_OUTPUT"
+
+  # The baseline issue (see `baseline` below) closes itself once Directory.Build.props has that version: on every push
+  # to main, an open "Set FrameReaderApiBaselineVersion to X" issue is closed when X is that property's value.
+  baseline-done:
+    if: github.ref_type == 'branch'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Close the baseline issue for the props file's version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prop=FrameReaderApiBaselineVersion
+          v=$(grep -oP "(?<=<$prop>)[^<]+" Directory.Build.props || true)
+          [ -n "$v" ] || exit 0
+          title="Set $prop to $v"
+          gh issue list --state open --search "\"$title\" in:title" --json number,title \
+            --jq ".[] | select(.title == \"$title\") | .number" | while read -r n; do
+            gh issue close "$n" --reason completed --comment "Directory.Build.props has \`<$prop>$v</$prop>\` on main ($GITHUB_SHA)."
+          done
+
+  # Our FFmpeg build for every platform (native.yml, cached): the FrameReader.Native.<rid> packages.
+  native:
+    needs: version
+    if: always() && needs.version.outputs.release == 'true'
+    uses: ./.github/workflows/native.yml
+
+  # The tests, with BtbN's ffmpeg (a third-party build): in a job of their own with read-only permissions, so no
+  # third-party binary runs where the NuGet publishing token and write access are.
+  test:
+    needs: version
+    if: always() && needs.version.outputs.release == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install ffmpeg
+        timeout-minutes: 15
+        uses: ./.github/actions/btbn-ffmpeg
+
+      - name: Test
+        run: dotnet test FrameReader.slnx --logger GitHubActions
+
+  # Packs, attests and publishes: only our own code and our FFmpeg build (native.yml, from pinned sources) run here.
+  release:
+    needs: [version, native, test]
+    if: always() && needs.version.outputs.release == 'true' && needs.native.result == 'success' && needs.test.result == 'success'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    environment: ${{ needs.version.outputs.environment }}
+    permissions:
+      contents: write   # create the GitHub release
+      id-token: write   # request the OIDC token that NuGet/login exchanges for a temporary API key
+      attestations: write   # build provenance for the packages
+    env:
+      V: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: native-*
+          path: native
+
+      - name: Pack
+        run: |
+          for d in native/native-*; do mv "$d" "native/${d#native/native-}"; done
+          dotnet pack src/FrameReader --configuration Release -p:FrameReaderVersion=$V --output artifacts
+          for rid in win-x64 linux-x64 linux-arm64 linux-musl-x64 osx-arm64 all; do   # all: the meta-package
+            dotnet pack src/FrameReader.Native -p:Rid=$rid -p:FrameReaderVersion=$V --output artifacts
+          done
+
+      # Signed provenance (built by this workflow from this commit): gh attestation verify <file> --repo bisforboman/FrameReader
+      - name: Attest the packages
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: 'artifacts/*.nupkg, artifacts/*.snupkg'
+
+      # Request the temporary key right before pushing: it is valid for one hour.
+      - name: NuGet login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
+        id: login
+        with:
+          user: ${{ vars.NUGET_USER }}
+
+      - name: Push to nuget.org
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        # One file at a time, each with a few tries, packages first and then their symbols: an error from nuget.org on
+        # one doesn't stop the others, and a re-run still sends the symbols of a package that is already there
+        # (--skip-duplicate skips both together otherwise).
+        run: |
+          failed=0
+          for f in artifacts/*.nupkg artifacts/*.snupkg; do
+            case "$f" in *.nupkg) only=--no-symbols ;; *) only= ;; esac   # a package's symbols get their own turn
+            for try in 1 2 3; do
+              if dotnet nuget push "$f" $only --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate; then
+                break
+              elif [ "$try" -lt 3 ]; then
+                sleep 60
+              else
+                echo "::error::Pushing $f failed"
+                failed=1
+              fi
+            done
+          done
+          exit $failed
+
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Its tag on this commit (unless pushed by hand), its CHANGELOG section ("## X.Y.Z – date" up to the next "## ")
+        # as the notes, else GitHub's PR list, and its packages.
+        run: |
+          prerelease=""; [[ "$V" == *-* ]] && prerelease="--prerelease"
+          awk -v v="## $V " 'index($0, v) == 1 { on = 1; next } on && /^## / { exit } on' src/FrameReader/CHANGELOG.md > notes.md
+          if [ -s notes.md ]; then notes=(--notes-file notes.md); else notes=(--generate-notes); fi
+          gh release create "v$V" artifacts/*.nupkg --target "$GITHUB_SHA" --title "FrameReader $V" "${notes[@]}" $prerelease
+
+  # A stable release: an issue to make it the API baseline (Directory.Build.props), once nuget.org serves it, since
+  # package validation downloads the baseline. An issue rather than a PR: a PR opened with this token gets no CI runs.
+  baseline:
+    needs: [version, release]
+    if: always() && needs.release.result == 'success'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 75
+    permissions:
+      issues: write
+    steps:
+      - name: Issue to move the API baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          V: ${{ needs.version.outputs.version }}
+        run: |
+          [[ "$V" != *-* ]] || exit 0
+          prop=FrameReaderApiBaselineVersion
+          for i in $(seq 1 60); do
+            curl -fsSL "https://api.nuget.org/v3-flatcontainer/framereader/index.json" | grep -q "\"$V\"" && break
+            [ "$i" = 60 ] && echo "::warning::nuget.org doesn't list FrameReader $V after an hour; opening the issue anyway"
+            sleep 60
+          done
+          title="Set $prop to $V"
+          if gh issue list --state all --search "\"$title\" in:title" --json title --jq '.[].title' | grep -qxF "$title"; then
+            echo "Already filed: $title"
+            exit 0
+          fi
+          gh issue create --title "$title" --body "$V is on nuget.org. Make it the API baseline, so packing fails on any breaking change from it (SDK package validation, CP000x errors):
+
+          - [ ] In \`Directory.Build.props\`: \`<$prop>$V</$prop>\`, in a PR (main is protected).
+
+          Opened by release.yml after publishing."
