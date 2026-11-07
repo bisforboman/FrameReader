@@ -422,7 +422,7 @@ public sealed unsafe class FrameDecoder : IDisposable
 
     /// <summary>
     /// _frame transposed and/or flipped into _oriented, as ffmpeg's transpose, hflip and vflip filters do: a pure
-    /// rearrangement of each plane's samples (planar formats, up to 16 bits).
+    /// rearrangement of each plane's samples (planar formats, up to 16 bits), in vector blocks (PlaneOrientation).
     /// </summary>
     void Orient()
     {
@@ -466,50 +466,33 @@ public sealed unsafe class FrameDecoder : IDisposable
             int opw = t ? ph : pw, oph = t ? pw : ph;
             byte* src = _frame->data[(uint)p], dst = _oriented->data[(uint)p];
             int ss = _frame->linesize[(uint)p], ds = _oriented->linesize[(uint)p];
-            for (int y = 0; y < oph; y++)
+            if (t)
             {
-                byte* d = dst + (long)y * ds;
-                if (!t)
-                {
-                    byte* s = src + (long)(_vflip ? ph - 1 - y : y) * ss;
-                    if (!_hflip)
-                    {
-                        Buffer.MemoryCopy(s, d, opw * bytes, opw * bytes);
-                    }
-                    else if (bytes == 1)
-                    {
-                        for (int x = 0; x < opw; x++)
-                            d[x] = s[opw - 1 - x];
-                    }
-                    else
-                    {
-                        for (int x = 0; x < opw; x++)
-                            ((ushort*)d)[x] = ((ushort*)s)[opw - 1 - x];
-                    }
-
-                    continue;
-                }
-
-                // transpose: output row y is source column y (dir & 2: counted from the right), read top down (dir & 1: bottom up)
-                int col = (_transpose & 2) != 0 ? pw - 1 - y : y;
-                byte* s0 = src + (long)col * bytes;
-                long step = ss;
+                // Output row y is source column y (dir & 2: counted from the right), read top down (dir & 1: bottom up).
+                long sstep = ss, dstep = ds;
                 if ((_transpose & 1) != 0)
                 {
-                    s0 += (long)(ph - 1) * ss;
-                    step = -step;
+                    src += (long)(ph - 1) * ss;
+                    sstep = -sstep;
                 }
 
-                if (bytes == 1)
+                if ((_transpose & 2) != 0)
                 {
-                    for (int x = 0; x < opw; x++)
-                        d[x] = s0[x * step];
+                    dst += (long)(oph - 1) * ds;
+                    dstep = -dstep;
                 }
+
+                PlaneOrientation.Transpose(src, sstep, dst, dstep, pw, ph, bytes);
+                continue;
+            }
+
+            for (int y = 0; y < oph; y++)
+            {
+                byte* d = dst + (long)y * ds, s = src + (long)(_vflip ? ph - 1 - y : y) * ss;
+                if (_hflip)
+                    PlaneOrientation.FlipRow(s, d, opw, bytes);
                 else
-                {
-                    for (int x = 0; x < opw; x++)
-                        ((ushort*)d)[x] = *(ushort*)(s0 + x * step);
-                }
+                    Buffer.MemoryCopy(s, d, opw * bytes, opw * bytes);
             }
         }
     }
