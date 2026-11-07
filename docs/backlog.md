@@ -106,3 +106,27 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
 - AudioFilter's output nobody reads: Loudness drains its graph without the `aformat` tail, the copy and the metadata strings
   - Why: `Loudness.Measure` and AudioAnalysis's loudness convert ebur128's doubles to floats, copy every frame and turn its metadata into strings, then drop them; ebur128's figures don't depend on what follows it (docs/decisions/2026-11-07-performance-work.md)
   - Status: Maybe
+
+- The 8-bit picture meters' leftovers: Luma8 and BlackPixels on Vector256, ContentLines from Luma8's row sums, ConstantColourDetector's flat frames histogrammed once, InterlaceDetector holding frame references instead of copies
+  - Why: each reads the frame or a part of it again, or at half the width AVX2 gives; integers, so the same results. Small gains each (docs/decisions/2026-11-07-performance-work.md)
+  - Status: Maybe
+
+- The small per-frame allocations on the video path: `Take()` without ReadAhead references a taken frame (two references for one), the fps feed frame, `NextRows`' `av_frame_alloc`, `LeftOut`'s closures, `Convert`'s `av_frame_ref` (which copies side data)
+  - Why: negligible next to decoding, but each is a malloc or a GC object a frame; trivial fixes, the same frames (docs/decisions/2026-11-07-performance-work.md)
+  - Status: Maybe
+
+- Vectorised start-code scans in UnreferencedPackets (Annex B, MPEG-1/2, MPEG-4 Part 2, DivX)
+  - Why: they look for `00 00 01` one byte at a time, also on keyframes after the target (`Skips` reads their parameter sets); `IndexOf` on a span would be several times faster. Only decides what to skip, so the same frames; about 1-2% of a read in MPEG-TS and MPEG-1/2/4 (docs/decisions/2026-11-07-performance-work.md)
+  - Status: Maybe
+
+- The small audio loops: WaveformBuilder's conversion, mean and min/max on vectors; ReferenceToneFinder's Goertzel state and ChannelMeter's sums in locals or channel lanes; SilenceFinder's search for the next loud sample as a vector search; SpectralStats fed the decoded planar frame when the reader neither resamples nor remixes
+  - Why: per-sample scalar code and loads and stores through arrays; each channel's order kept (and NaN, saturation and integer division as the scalar code has them), so the same results. Low gain: tone stops at its search duration, and SpectralStats' FFT dominates (docs/decisions/2026-11-07-performance-work.md)
+  - Status: Maybe
+
+- Hardware decoding: several frames in flight (decode on the GPU while the previous frame copies back), and GPU decoders beyond Windows (VAAPI on Linux, VideoToolbox on macOS)
+  - Why: on Windows each frame waits for the GPU and its copy, so D3D11VA is slower in wall time than software decoding (FrameDecoderOptions.HardwareDecoding); overlapping them could make it pay where CPU is short. Other platforms need the native build with libva or VideoToolbox (licences, `--disable-autodetect`), and whether frames equal software decoding depends on each GPU's decoder, so it stays opt-in. Not measured (docs/decisions/2026-11-07-performance-work.md)
+  - Status: Maybe
+
+- The native build with link-time optimisation (`--enable-lto`, and for zlib, dav1d, LAME and libwebp)
+  - Why: may shave a little off FFmpeg's C code (its hot loops are assembly already); not measured. Any edit to tools/native/build-ffmpeg.sh rebuilds every platform's FFmpeg, so it waits for a rebuild that's needed anyway, as the SBOM row does, and needs its own before-and-after run of frame-reader-bench.yml (docs/decisions/2026-11-07-performance-work.md)
+  - Status: Maybe

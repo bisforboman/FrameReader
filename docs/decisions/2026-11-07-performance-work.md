@@ -21,7 +21,8 @@ container. Every idea had to keep the bytes (or the doubles) identical, or be op
 - **Smaller or riskier** (the backlog's Maybe rows): swscale's slice threads (faster scaling, but scale's slice
   threads varied ffmpeg's frames run to run on CI, Encoding.cs), pooled buffers for rotated and deinterlaced frames,
   the extra copy for Yuv420p output, ReadAhead's handoff, the wide picture meters, LoudnessMeter's K-weighting,
-  AudioFilter's output nobody reads.
+  AudioFilter's output nobody reads, the 8-bit meters' leftovers, small per-frame allocations, the start-code scans,
+  the small audio loops, hardware decoding with frames in flight and beyond Windows, and an LTO native build.
 - **No benchmarks** for any of it: frame-reader-bench.yml timed only reading frames against ffmpeg's pipe.
 
 ## The question
