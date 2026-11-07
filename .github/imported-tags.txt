@@ -1,5 +1,8 @@
 # The framereader-vX.Y.Z tags of github.com/bisforboman/shotdetector, as vX.Y.Z on the same commits after
-# git filter-repo (release.yml's tags job creates any that are missing). Each line: tag, then commit.
+# git filter-repo. release.yml counts these versions as released. They can be pushed as tags from a clone with
+# write access (a workflow's token can't create refs on commits that change workflow files):
+#   grep -v '^#' .github/imported-tags.txt | while read -r t s; do git tag "$t" "$s"; done; git push origin --tags
+# Each line: tag, then commit.
 v2.1.0 7c198a01c20831e5ce8ed89bf1b15d3c28e3b6dd
 v2.2.0 23e549dc6e6b876c305e977f8448f89ebfd96794
 v2.2.1 fd682f21053f4fdce6cd69ed5691f2319dac5e91

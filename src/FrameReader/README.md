@@ -649,7 +649,9 @@ Reading frames against the ffmpeg executable's pipe and FFMpegCore (benchmarks/F
 BenchmarkDotNet, the first 500 frames of three films at whole size and at 160x90, weekly on GitHub's x64 and ARM
 runners): the current numbers are in the [latest runs](https://github.com/bisforboman/FrameReader/actions/workflows/frame-reader-bench.yml). Whole frames come out well ahead of both
 (no process, no pipe); small frames, where decoding is the cost, ahead or equal. FrameReader allocates next to
-nothing per frame (frames are views of FFmpeg's buffers); the pipe readers allocate per frame.
+nothing per frame (frames are views of FFmpeg's buffers); the pipe readers allocate per frame. The same runs time
+FrameReader's own paths: rotated, scaled and Yuv420p reads, a picture a second (`ReadAt`, `TryReadForwardTo`), the
+audio analyses on one decode, and the picture and loudness measures on generated frames and samples.
 
 ## Frame lifetime
 

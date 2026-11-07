@@ -19,6 +19,7 @@ released, and a breaking change is a major version.
 | The types and what they handle | src/FrameReader/README.md (the package's front page), docs/frame-reader-library.md |
 | The FFmpeg interop gotchas | src/FrameReader/CLAUDE.md |
 | Our FFmpeg build | tools/native/build-ffmpeg.sh, .github/workflows/native.yml, src/FrameReader.Native/README.md |
+| The licences of what that build links in | THIRD-PARTY-NOTICES.md |
 | What's next | docs/backlog.md |
 | What the owner decided and why | docs/decisions/ (its README; the decisions before the move are in ShotDetector's) |
 
@@ -29,8 +30,8 @@ released, and a breaking change is a major version.
   merged, never stacked. Release notes are the version's CHANGELOG section: keep sections grouped (breaking changes,
   new, faster, fixed). A change to the native build is a release too.
 - Merging it releases: release.yml (every push to main) releases the newest version if it isn't tagged (`vX.Y.Z`; the
-  releases made from ShotDetector's repository were `framereader-vX.Y.Z` there and are `vX.Y.Z` here,
-  .github/imported-tags.txt). A hand-pushed `v*` tag still works. Pass `-p:FrameReaderVersion`.
+  releases made from ShotDetector's repository, `framereader-vX.Y.Z` there, count as released here:
+  .github/imported-tags.txt, which also says how to push them as tags). A hand-pushed `v*` tag still works. Pass `-p:FrameReaderVersion`.
 - Prereleases (`-`) publish without approval (environment `prerelease`); stable ones wait for the owner's approval
   (environment `release`).
 - Once a stable release is on nuget.org, set `FrameReaderApiBaselineVersion` in Directory.Build.props (release.yml
@@ -50,7 +51,7 @@ released, and a breaking change is a major version.
   the same time each use their own worktree.
 - **Changelog**: a PR with a change users of the packages notice adds `changes/framereader/<branch>.md`
   (changes/README.md), never the CHANGELOG itself.
-- **Backlog**: docs/backlog.md; set a row's status when work starts; when it is Done (Dropped, Won't do) move it to the
+- **Backlog**: docs/backlog.md (the `backlog` skill previews and extends it); set a row's status when work starts; when it is Done (Dropped, Won't do) move it to the
   end of docs/backlog-done.md. Add items when something turns up, with why.
 - **Asking the owner**: whenever you need input (a choice, an approval, whether to go on), ask with the
   multiple-choice prompt (AskUserQuestion), not at the end of a reply. Record a design decision's question, choices
@@ -92,7 +93,8 @@ released, and a breaking change is a major version.
 - `tools/`: `native/build-ffmpeg.sh`, `changelog.py`, `media.py` (pinned real-world media), `nightly-issue.sh`,
   `vulnerable-packages.py`.
 - `.github/workflows`: `ci.yml`, `release.yml`, `native.yml` (our FFmpeg build, which the others call),
-  `realworld-audio.yml` (nightly), `frame-reader-bench.yml` (weekly), `codeql.yml`, `dependabot-auto-merge.yml`,
+  `realworld-audio.yml` (nightly), `frame-reader-bench.yml` (weekly), `upstream.yml` (weekly: an issue per newer
+  FFmpeg, linked library, BtbN build or StyleBro), `codeql.yml`, `dependabot-auto-merge.yml`,
   `vulnerable-packages.yml` (weekly). Each header says the rest.
 
 ## Gotchas
