@@ -240,3 +240,7 @@ Built as designed (2026-11-03), with two details settled in the code: the callba
 `Action<T>` allows a ref struct), and a call that asks for no analysis is an `ArgumentException`, like the other
 options' mistakes, rather than a pass that reads for nothing. `AudioAnalysisTests` compares every result with its
 standalone call; the packet counter is `AudioReader.PacketsRead`.
+
+Since 2026-11-07 ([2026-11-07-audio-analysis-loudness-thread.md](2026-11-07-audio-analysis-loudness-thread.md)) the
+loudness graph runs on a thread of its own when another analysis runs beside it: "Running the analyses on threads of
+their own" above was decided on the analyses' work per chunk, and ebur128's true peak turned out to be most of a pass.
