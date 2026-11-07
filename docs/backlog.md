@@ -12,7 +12,7 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
 ## Next
 
 - Vectorise FrameDecoder's rotation: `Orient`'s hflip and transpose with Vector128 shuffles and blocks, and a buffer pool for its output
-  - Why: a display rotation of 90 or 270 degrees (phone video) moves one sample at a time; at 1080p that costs more than decoding the frame, and the rotated read of ReadPaths takes about twice the plain one, with a managed allocation per frame (docs/decisions/2026-11-07-performance-work.md)
+  - Why: a display rotation of 90 or 270 degrees (phone video) moves one sample at a time; at 1080p that costs more than decoding the frame, and the rotated read of ReadPaths takes about twice the plain one (docs/decisions/2026-11-07-performance-work.md)
   - Status: In progress (a cloud session, 2026-11-07)
 
 - AudioAnalysis: the loudness graph on its own thread, fed references of the decoded frames, while the caller's thread converts for the other analyses
@@ -87,8 +87,8 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
   - Why: when the output isn't writable (a held frame: `ReadAhead`, `TakeFrame`), each frame gets a fresh `av_frame_get_buffer`, a malloc of the whole frame with its page faults (FrameDecoder.cs, the row deinterlacer and `FromHardware`); the rotation row covers `Orient`'s (docs/decisions/2026-11-07-performance-work.md)
   - Status: Maybe
 
-- Yuv420p and same-size Gray8 output without the extra copy
-  - Why: Yuv420p always goes through `av_image_copy_to_buffer` after swscale; for widths whose planes come out contiguous swscale could write the packed layout itself, and Gray8 from 8-bit limited-range YUV at the same size is the Y plane. One copy of the frame less (about 0.3 ms a frame at 1080p) (docs/decisions/2026-11-07-performance-work.md)
+- Packed output without the extra copy: Yuv420p, packed RGB whose rows swscale pads, and same-size Gray8
+  - Why: VideoFrameReader hands out `_out`'s buffer only when its stride is the packed width; otherwise it packs every frame with `av_image_copy_to_buffer` into a managed array made once per reader (6 MB, on the large object heap, for 1080x1920 Bgr24). That is every Yuv420p read, and packed RGB of widths whose rows `av_frame_get_buffer` pads: a 1080-wide Bgr24 row is 3240 bytes, so a rotated 1920x1080 video copies each frame (the rotation session found it, 2026-11-07). An output frame with the packed stride where swscale's alignment allows it, or one contiguous buffer for Yuv420p's planes, saves a frame's copy (about 0.3 ms at 1080p); Gray8 from 8-bit limited-range YUV at the same size is the Y plane (docs/decisions/2026-11-07-performance-work.md)
   - Status: Maybe
 
 - ReadAhead's handoff: pulse only when the other side waits, spin briefly before `Monitor.Wait`
