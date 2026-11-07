@@ -23,31 +23,8 @@ permissions:
   contents: read
 
 jobs:
-  # The releases made from github.com/bisforboman/shotdetector (tags framereader-vX.Y.Z there), tagged vX.Y.Z here
-  # on the commits git filter-repo carried over (.github/imported-tags.txt): created once, before the version job
-  # looks for the newest tag. Through the API, as a tag pushed with this token starts no workflow.
-  tags:
-    if: github.ref_type == 'branch'
-    runs-on: ubuntu-26.04
-    timeout-minutes: 5
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: The imported tags
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          grep -v '^#' .github/imported-tags.txt | while read -r tag sha; do
-            git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null && continue
-            gh api "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$tag" -f "sha=$sha" > /dev/null
-            echo "Tagged $tag at $sha" | tee -a "$GITHUB_STEP_SUMMARY"
-          done
-
   # The version, and whether it still needs releasing (most pushes to main: no, and nothing else runs).
   version:
-    needs: tags
-    if: always() && (needs.tags.result == 'success' || needs.tags.result == 'skipped')
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     outputs:
@@ -60,17 +37,22 @@ jobs:
       - id: version
         run: |
           log=src/FrameReader/CHANGELOG.md
+          # The releases made from github.com/bisforboman/shotdetector (tags framereader-vX.Y.Z there) count as tagged:
+          # .github/imported-tags.txt lists them with their commits in this history. They aren't tags here, as this
+          # workflow's token can't create a ref on commits that change workflow files; the owner can push them by hand.
+          imported=$(grep -v '^#' .github/imported-tags.txt | cut -d' ' -f1 | sed 's|^v||')
           v=$(grep -m1 -oE '^## [0-9]+\.[0-9]+\.[0-9]+[^ ]*' "$log" | cut -c4-)
           due=false
           case "$GITHUB_REF_TYPE/$GITHUB_REF_NAME" in
             tag/v*) v="${GITHUB_REF_NAME#v}"; due=true ;;
             *)
-              git ls-remote --exit-code --tags origin "refs/tags/v$v" > /dev/null || due=true
+              git ls-remote --exit-code --tags origin "refs/tags/v$v" > /dev/null || grep -qxF "$v" <<< "$imported" || due=true
               # Never skip a stable version silently: each run releases the newest version only, so an older one newer
               # than the newest tag (approved after the next release PR merged, or its run cancelled) would never be
               # published. Fail naming it instead (2026-11-06: 2.24.0 went out only in 2.25.0).
               tags=$(git ls-remote --tags origin 'refs/tags/v*' | sed -E 's|.*refs/tags/||; s|\^\{\}$||' \
-                | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sed 's|^v||' | sort -uV)
+                | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sed 's|^v||'; echo "$imported")
+              tags=$(grep -v '^$' <<< "$tags" | sort -uV)
               newest_tag=$(tail -n1 <<< "$tags")
               bad=0
               for old in $(grep -oE '^## [0-9]+\.[0-9]+\.[0-9]+( |$)' "$log" | cut -c4- | tr -d ' '); do
