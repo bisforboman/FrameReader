@@ -1,9 +1,14 @@
+using System.Numerics;
+using System.Runtime.InteropServices;
+
 namespace FrameReader;
 
 /// <summary>
 /// One channel's true peak: the largest magnitude of its samples and of the points between them, interpolated with a
 /// windowed sinc (16 taps a phase) at 4 times the rate below 192 kHz (BS.1770-4 Annex 2; from 192 kHz the samples alone). Only the stretches that could
 /// beat the peak so far are interpolated (a stretch's largest sample times the filter's gain bounds what it can give).
+/// Neighbouring points are interpolated together in vectors, each point's products added in the same order as alone
+/// (no fused multiply-adds), and a NaN among the samples or points makes the peak NaN, as Math.Max does.
 /// </summary>
 internal sealed class TruePeakMeter
 {
@@ -43,10 +48,10 @@ internal sealed class TruePeakMeter
     /// <summary>The true peak so far, a linear amplitude.</summary>
     public double Peak { get; private set; }
 
-    public void Add(ReadOnlySpan<float> samples)
+    /// <summary>Adds the next samples, the largest of whose magnitudes by Math.Max (NaN if any is) is <paramref name="samplePeak"/>.</summary>
+    public void Add(ReadOnlySpan<float> samples, double samplePeak)
     {
-        foreach (float s in samples)
-            Peak = Math.Max(Peak, Math.Abs(s));
+        Peak = Math.Max(Peak, samplePeak);
         if (_factor == 1)
             return;
         if (_count + samples.Length > _buffer.Length)
@@ -61,7 +66,7 @@ internal sealed class TruePeakMeter
     {
         if (_factor == 1)
             return;
-        Add(new float[Half]);
+        Add(new float[Half], 0);
     }
 
     /// <summary>Every point between the samples that have Half samples after them; keeps the Half - 1 before the next.</summary>
@@ -74,12 +79,32 @@ internal sealed class TruePeakMeter
         {
             int stop = Math.Min(start + Block, end);
             var window = _buffer.AsSpan(start - Half + 1, stop - start + 2 * Half - 1);
-            float largest = 0;
-            foreach (float s in window)
-                largest = Math.Max(largest, Math.Abs(s));
-            if (largest * _gain <= Peak)
+            if (Largest(window) * _gain <= Peak)
                 continue;
-            for (int i = start; i < stop; i++)
+            int i = start;
+            if (Vector.IsHardwareAccelerated)
+            {
+                // Vector<float>.Count neighbouring points at a time, lane k the point after sample i + k: its taps times
+                // the samples around it, added in the order the point alone adds them.
+                ref float buffer = ref MemoryMarshal.GetArrayDataReference(_buffer);
+                var top = Vector<float>.Zero;
+                var nan = Vector<int>.Zero;
+                for (; i + Vector<float>.Count <= stop; i += Vector<float>.Count)
+                {
+                    foreach (var taps in _phases)
+                    {
+                        var y = Vector<float>.Zero;
+                        for (int j = 0; j < taps.Length; j++)
+                            y += new Vector<float>(taps[j]) * Vector.LoadUnsafe(ref buffer, (nuint)(i - Half + 1 + j));
+                        top = Vector.Max(top, Vector.Abs(y));
+                        nan |= ~Vector.Equals(y, y);
+                    }
+                }
+
+                Peak = Max(Peak, top, nan);
+            }
+
+            for (; i < stop; i++)
             {
                 var around = _buffer.AsSpan(i - Half + 1, 2 * Half);
                 foreach (var taps in _phases)
@@ -98,6 +123,44 @@ internal sealed class TruePeakMeter
             _buffer.AsSpan(end - first, keep).CopyTo(_buffer);
             _count = keep;
         }
+    }
+
+    /// <summary>The largest magnitude of the samples by Math.Max: NaN if any is NaN.</summary>
+    static float Largest(ReadOnlySpan<float> samples)
+    {
+        float largest = 0;
+        int k = 0;
+        if (Vector.IsHardwareAccelerated)
+        {
+            ref float s = ref MemoryMarshal.GetReference(samples);
+            var top = Vector<float>.Zero;
+            var nan = Vector<int>.Zero;
+            for (; k + Vector<float>.Count <= samples.Length; k += Vector<float>.Count)
+            {
+                var v = Vector.LoadUnsafe(ref s, (nuint)k);
+                top = Vector.Max(top, Vector.Abs(v));
+                nan |= ~Vector.Equals(v, v);
+            }
+
+            largest = (float)Max(0, top, nan);
+        }
+
+        for (; k < samples.Length; k++)
+            largest = Math.Max(largest, Math.Abs(samples[k]));
+        return largest;
+    }
+
+    /// <summary>
+    /// Math.Max of <paramref name="peak"/> and the lanes of <paramref name="top"/> (magnitudes), NaN where any lane of
+    /// <paramref name="nan"/> is set (a NaN that the vector's max may have dropped).
+    /// </summary>
+    static double Max(double peak, Vector<float> top, Vector<int> nan)
+    {
+        if (nan != Vector<int>.Zero)
+            return double.NaN;
+        for (int k = 0; k < Vector<float>.Count; k++)
+            peak = Math.Max(peak, top[k]);
+        return peak;
     }
 
     static double Sinc(double x) => x == 0 ? 1 : Math.Sin(Math.PI * x) / (Math.PI * x);
