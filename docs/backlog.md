@@ -19,10 +19,6 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
   - Why: ebur128 with true peaks (192 kHz inside the filter) and the conversion for tone, waveform and silences run one after the other on one thread; up to twice as fast when loudness and another analysis are asked for (docs/decisions/2026-11-07-performance-work.md)
   - Status: In progress (a cloud session, 2026-11-07)
 
-- Faster measures: GamutMeter's table, FreezeDetector's SAD, TruePeakMeter's interpolation
-  - Why: GamutMeter rebuilds its table for every meter (64 MB and most of a second at 12 bits); FreezeDetector's sum of differences widens bytes three times and is scalar above 8 bits (much slower at 10 bits than at 8); TruePeakMeter interpolates one point at a time. Integer sums, a cache, and vectors that keep each point's order: the same results (docs/decisions/2026-11-07-performance-work.md)
-  - Status: In progress (a cloud session, 2026-11-07)
-
 - The first release from this repository: a prerelease (2.26.0-pre), then the next stable version
   - Why: checks the nuget.org trusted publishing policy for this repository, the environments and the native packages before a stable release depends on them (ShotDetector's docs/framereader-split.md, step 5)
   - Status: Open (waits on the owner's settings, below)
