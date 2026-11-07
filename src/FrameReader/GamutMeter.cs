@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 
 namespace FrameReader;
 
@@ -30,14 +31,19 @@ public sealed record GamutOptions
 /// </summary>
 /// <remarks>
 /// Each of R, G and B rises with Y by the same step for a given Cb and Cr, so the pixels in gamut are one run of Y codes
-/// for each pair: a table of those runs (2^(2 x depth) entries, built when the meter is made: some 50 ms at 10 bits), its
-/// edges found by <see cref="InGamut"/> itself, makes a pixel one lookup.
+/// for each pair: a table of those runs (2^(2 x depth) entries), its edges found by <see cref="InGamut"/> itself, makes a
+/// pixel one lookup. The table is built once for each depth, range, limits and matrix and shared by the meters made with
+/// them (the last few kept: a 12-bit table is 64 MB).
 /// </remarks>
 public sealed class GamutMeter
 {
+    // The tables kept for meters made later, the latest used first, up to CacheBytes of them.
+    const long CacheBytes = 128L << 20;
+    static readonly Lock CacheLock = new();
+    static readonly LinkedList<(Arithmetic Key, Lazy<uint[]> Runs)> Cache = [];
+
     readonly int _width, _height, _depth, _hShift, _vShift, _chromaWidth;
-    readonly bool _fullRange;
-    readonly double _low, _high, _kr, _kb;
+    readonly Arithmetic _arithmetic;
     readonly List<long> _pts = [];
     readonly List<double> _shares = [];
     readonly uint[] _runs;
@@ -56,12 +62,13 @@ public sealed class GamutMeter
             throw new ArgumentException("The bit depth must be 8 to 12.", nameof(bitDepth));
         if (!(o.Low < o.High))
             throw new ArgumentException("The low limit must be below the high one.", nameof(options));
-        (_width, _height, _depth, _fullRange, _low, _high) = (width, height, bitDepth, fullRange, o.Low, o.High);
-        (_kr, _kb) = o.Matrix ?? (height < 720 ? (0.299, 0.114) : (0.2126, 0.0722));
+        (_width, _height, _depth) = (width, height, bitDepth);
+        var (kr, kb) = o.Matrix ?? (height < 720 ? (0.299, 0.114) : (0.2126, 0.0722));
+        _arithmetic = new Arithmetic(bitDepth, fullRange, o.Low, o.High, kr, kb);
         _hShift = chroma == ChromaSubsampling.Yuv444 ? 0 : 1;
         _vShift = chroma == ChromaSubsampling.Yuv420 ? 1 : 0;
         _chromaWidth = (width + _hShift) >> _hShift;
-        _runs = Build();
+        _runs = Runs(_arithmetic);
     }
 
     /// <summary>A meter for frames of <paramref name="format"/> (its size, chroma, depth and range).</summary>
@@ -81,7 +88,7 @@ public sealed class GamutMeter
     };
 
     /// <summary>The Kr and Kb the frames are converted with.</summary>
-    public (double Kr, double Kb) Matrix => (_kr, _kb);
+    public (double Kr, double Kb) Matrix => (_arithmetic.Kr, _arithmetic.Kb);
 
     /// <summary>Each frame's share of pixels out of gamut (0 to 1), in the order added.</summary>
     public IReadOnlyList<double> Shares => _shares;
@@ -145,13 +152,39 @@ public sealed class GamutMeter
     /// scaled to the depth; full range 0 to 2^depth − 1 about 2^(depth − 1)), R = Y + 2(1 − Kr)Cr, B = Y + 2(1 − Kb)Cb,
     /// G = (Y − Kr·R − Kb·B) / (1 − Kr − Kb).
     /// </summary>
-    public bool InGamut(int y, int cb, int cr)
+    public bool InGamut(int y, int cb, int cr) => _arithmetic.InGamut(y, cb, cr);
+
+    // The table of runs for the arithmetic: the one kept for it, or built (once, by whichever meter asks first).
+    static uint[] Runs(Arithmetic arithmetic)
     {
-        var (yn, pb, pr) = Normalised(y, cb, cr);
-        double r = yn + (2 * (1 - _kr) * pr);
-        double b = yn + (2 * (1 - _kb) * pb);
-        double g = (yn - (_kr * r) - (_kb * b)) / (1 - _kr - _kb);
-        return r >= _low && r <= _high && g >= _low && g <= _high && b >= _low && b <= _high;
+        Lazy<uint[]> runs;
+        lock (CacheLock)
+        {
+            var node = Cache.First;
+            while (node is not null && !node.Value.Key.Equals(arithmetic))
+                node = node.Next;
+            if (node is null)
+            {
+                node = Cache.AddFirst((arithmetic, new Lazy<uint[]>(() => Build(arithmetic))));
+                long bytes = 0;
+                for (var n = Cache.First; n is not null; n = n.Next)
+                    bytes += n.Value.Key.TableBytes;
+                while (bytes > CacheBytes && Cache.Last != node)
+                {
+                    bytes -= Cache.Last!.Value.Key.TableBytes;
+                    Cache.RemoveLast();
+                }
+            }
+            else if (node != Cache.First)
+            {
+                Cache.Remove(node);
+                Cache.AddFirst(node);
+            }
+
+            runs = node.Value.Runs;
+        }
+
+        return runs.Value;
     }
 
     static void Check(ReadOnlySpan<byte> plane, int stride, int rowBytes, int height, int index)
@@ -242,33 +275,73 @@ public sealed class GamutMeter
         return outside;
     }
 
-    (double Y, double Cb, double Cr) Normalised(int y, int cb, int cr)
+    /// <summary>
+    /// What a table depends on, and the arithmetic itself: the depth, the range, the limits and the matrix (the limits
+    /// and the matrix compared by their bits).
+    /// </summary>
+    readonly struct Arithmetic(int depth, bool fullRange, double low, double high, double kr, double kb) : IEquatable<Arithmetic>
     {
-        double s = 1 << (_depth - 8);
-        if (_fullRange)
+        public int Depth { get; } = depth;
+
+        public bool FullRange { get; } = fullRange;
+
+        public double Low { get; } = low;
+
+        public double High { get; } = high;
+
+        public double Kr { get; } = kr;
+
+        public double Kb { get; } = kb;
+
+        public long TableBytes => sizeof(uint) * (1L << (2 * Depth));
+
+        public bool Equals(Arithmetic other) => Depth == other.Depth && FullRange == other.FullRange && Bits(Low) == Bits(other.Low)
+            && Bits(High) == Bits(other.High) && Bits(Kr) == Bits(other.Kr) && Bits(Kb) == Bits(other.Kb);
+
+        public override bool Equals(object? obj) => obj is Arithmetic other && Equals(other);
+
+        public override int GetHashCode() => HashCode.Combine(Depth, FullRange, Bits(Low), Bits(High), Bits(Kr), Bits(Kb));
+
+        public bool InGamut(int y, int cb, int cr)
         {
-            double max = (1 << _depth) - 1, mid = 1 << (_depth - 1);
-            return (y / max, (cb - mid) / max, (cr - mid) / max);
+            var (yn, pb, pr) = Normalised(y, cb, cr);
+            double r = yn + (2 * (1 - Kr) * pr);
+            double b = yn + (2 * (1 - Kb) * pb);
+            double g = (yn - (Kr * r) - (Kb * b)) / (1 - Kr - Kb);
+            return r >= Low && r <= High && g >= Low && g <= High && b >= Low && b <= High;
         }
 
-        return ((y - (16 * s)) / (219 * s), (cb - (128 * s)) / (224 * s), (cr - (128 * s)) / (224 * s));
+        public (double Y, double Cb, double Cr) Normalised(int y, int cb, int cr)
+        {
+            double s = 1 << (Depth - 8);
+            if (FullRange)
+            {
+                double max = (1 << Depth) - 1, mid = 1 << (Depth - 1);
+                return (y / max, (cb - mid) / max, (cr - mid) / max);
+            }
+
+            return ((y - (16 * s)) / (219 * s), (cb - (128 * s)) / (224 * s), (cr - (128 * s)) / (224 * s));
+        }
+
+        static long Bits(double value) => BitConverter.DoubleToInt64Bits(value);
     }
 
     // The run of Y codes in gamut for every Cb and Cr: estimated from the limits, then moved to where InGamut changes.
-    uint[] Build()
+    // Each Cb's runs on a thread of their own: every entry depends on its codes alone.
+    static uint[] Build(Arithmetic a)
     {
-        int size = 1 << _depth, max = size - 1;
+        int depth = a.Depth, size = 1 << depth, max = size - 1;
         var runs = new uint[size * size];
-        double kg = 1 - _kr - _kb;
-        double yScale = _fullRange ? max : 219.0 * (1 << (_depth - 8));
-        double yOffset = _fullRange ? 0 : 16.0 * (1 << (_depth - 8));
-        for (int cb = 0; cb < size; cb++)
+        double kg = 1 - a.Kr - a.Kb;
+        double yScale = a.FullRange ? max : 219.0 * (1 << (depth - 8));
+        double yOffset = a.FullRange ? 0 : 16.0 * (1 << (depth - 8));
+        Parallel.For(0, size, cb =>
         {
             for (int cr = 0; cr < size; cr++)
             {
-                var (_, pb, pr) = Normalised(0, cb, cr);
-                double dr = 2 * (1 - _kr) * pr, db = 2 * (1 - _kb) * pb, dg = -((_kr * dr) + (_kb * db)) / kg;
-                double low = _low - Math.Min(dr, Math.Min(dg, db)), high = _high - Math.Max(dr, Math.Max(dg, db));
+                var (_, pb, pr) = a.Normalised(0, cb, cr);
+                double dr = 2 * (1 - a.Kr) * pr, db = 2 * (1 - a.Kb) * pb, dg = -((a.Kr * dr) + (a.Kb * db)) / kg;
+                double low = a.Low - Math.Min(dr, Math.Min(dg, db)), high = a.High - Math.Max(dr, Math.Max(dg, db));
                 int first = (int)Math.Clamp(Math.Ceiling((low * yScale) + yOffset), 0, max);
                 int last = (int)Math.Clamp(Math.Floor((high * yScale) + yOffset), 0, max);
 
@@ -277,18 +350,18 @@ public sealed class GamutMeter
                 int? inside = null;
                 for (int at = Math.Max(0, first - 1); at <= Math.Min(max, Math.Min(last, first + 1) + 1) && inside is null; at++)
                 {
-                    if (InGamut(at, cb, cr))
+                    if (a.InGamut(at, cb, cr))
                         inside = at;
                 }
 
                 if (inside is { } found)
                 {
                     (first, last) = (found, Math.Max(found, last));
-                    while (first > 0 && InGamut(first - 1, cb, cr))
+                    while (first > 0 && a.InGamut(first - 1, cb, cr))
                         first--;
-                    while (last > first && !InGamut(last, cb, cr))
+                    while (last > first && !a.InGamut(last, cb, cr))
                         last--;
-                    while (last < max && InGamut(last + 1, cb, cr))
+                    while (last < max && a.InGamut(last + 1, cb, cr))
                         last++;
                 }
                 else
@@ -297,9 +370,9 @@ public sealed class GamutMeter
                     (first, last) = (ushort.MaxValue, ushort.MaxValue);
                 }
 
-                runs[(cb << _depth) | cr] = (uint)first | ((uint)last << 16);
+                runs[(cb << depth) | cr] = (uint)first | ((uint)last << 16);
             }
-        }
+        });
 
         return runs;
     }
