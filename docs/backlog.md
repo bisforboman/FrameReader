@@ -35,6 +35,18 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
   - Why: it still names github.com/bisforboman/shotdetector; any edit to the script rebuilds every platform's FFmpeg (the cache key), so it waits for a change that needs a rebuild anyway
   - Status: Open
 
+- Read-ahead: convert ahead too, for TryRead
+  - Why: `VideoFrameReaderOptions.ReadAhead` (#568, ShotDetector issue #566) decodes, deinterlaces and rotates frames ahead on a background thread but converts each frame in the read, because `TryReadForwardTo` only knows which frame it wants when asked. Plain `TryRead` wants every frame, so its conversion could run ahead too. The same swscale context on another thread, so the same bytes, unlike swscale's slice threads (Maybe, below); at whole size the conversion is most of what's left on the caller's thread. Moved from Maybe after the 2026-11-07 review of what's next
+  - Status: Open (the owner, 2026-11-07; Maybe since 2026-10-28)
+
+- The approximate speed options in the README: `CodecOptions` `skip_loop_filter` = `all` (ffmpeg's `-skip_loop_filter all` before `-i`) next to `FrameDecoderOptions`' keyframes only, with a test that the frames equal ffmpeg's with the same option
+  - Why: `CodecOptions` already passes any decoder option, so analysis that can take a slightly different picture (motion, cuts, thumbnails) can decode H.264 and HEVC faster today, but nothing says so; a test keeps it the same as the command line, as the rest is
+  - Status: Open
+
+- Wider output formats: `Gray16`, `Rgb48` and planar 32-bit float RGB (ffmpeg's `format=gray16le`, `rgb48le`, `gbrpf32le`) as `FrameFormat`s, checked byte for byte against `-f rawvideo`
+  - Why: every `FrameFormat` is 8-bit, so a 10-bit ProRes or HDR source loses its low bits before the caller sees it, and ML input (the library's design doc names it) converts each 8-bit frame to float again in managed code
+  - Status: Open
+
 ## Waiting
 
 - The owner sets up the repository: branch protection on main (required checks `build` and `CI passed`), auto-merge, the environments `release` (with approval) and `prerelease`, the `NUGET_USER` variable, the nuget.org trusted publishing policy (workflow `release.yml`, package glob `FrameReader*`), and the transfer of ShotDetector's open `framereader` issues
@@ -54,10 +66,6 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
   - Status: Waiting (on the owner)
 
 ## Maybe
-
-- Read-ahead: convert ahead too, for TryRead
-  - Why: `VideoFrameReaderOptions.ReadAhead` (#568, ShotDetector issue #566) decodes, deinterlaces and rotates frames ahead on a background thread but converts each frame in the read, because `TryReadForwardTo` only knows which frame it wants when asked. Plain `TryRead` wants every frame, so its conversion could run ahead too
-  - Status: Maybe (the owner, 2026-10-28)
 
 - Segment decoders inside `ReadAhead`: several decoders on different parts of the file
   - Why: ffmpeg caps frame threads at 16, so above that cores sit idle; issue #566's own run with 4 `ReadAt` readers shows the gain. Pays only above ~16 cores
@@ -117,4 +125,12 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
 
 - The native build with link-time optimisation (`--enable-lto`, and for zlib, dav1d, LAME and libwebp)
   - Why: may shave a little off FFmpeg's C code (its hot loops are assembly already); not measured. Any edit to tools/native/build-ffmpeg.sh rebuilds every platform's FFmpeg, so it waits for a rebuild that's needed anyway, as the SBOM row does, and needs its own before-and-after run of frame-reader-bench.yml (docs/decisions/2026-11-07-performance-work.md)
+  - Status: Maybe
+
+- HDR to SDR: zimg in the native build, with the `zscale` and `tonemap` filters, and a `VideoFrameReaderOptions` option that tone-maps as `-vf zscale=t=linear,tonemap=...,zscale=t=bt709` does
+  - Why: HDR (PQ, HLG) phone and streaming video converted to Bgr24 probably reads washed out today (not checked): swscale doesn't tone-map, and the build has only `scale` among the video filters. zimg is a new linked library (its licence in THIRD-PARTY-NOTICES.md), and any edit to tools/native/build-ffmpeg.sh rebuilds every platform's FFmpeg, so it waits for a rebuild that's needed anyway, as the SBOM row does
+  - Status: Maybe
+
+- A performance check on pull requests: a short ReadPaths run timed against `ffmpeg -f null` in the same job, as an annotation when the ratio worsens, not a failing check
+  - Why: frame-reader-bench.yml runs weekly, so a slower path shows only after it merged; the ratio to ffmpeg in one job evens out how fast the runner is, though shared runners are noisy, so it informs rather than gates
   - Status: Maybe
