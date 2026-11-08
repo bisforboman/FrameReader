@@ -103,6 +103,78 @@ public partial class GamutMeterTests
         }
     }
 
+    // At 10 and 12 bits (16-bit samples, the bits above the depth ignored), every Y code against InGamut for a grid of
+    // chroma pairs, the table built on several threads.
+    [Theory]
+    [InlineData(10, false, "bt709")]
+    [InlineData(12, false, "bt2020nc")]
+    [InlineData(12, true, "bt709")]
+    public void TheDeepTablesAreTheArithmetic(int depth, bool full, string matrix)
+    {
+        AssertTableIsArithmetic(new GamutMeter(1 << depth, 1, ChromaSubsampling.Yuv444, depth, full, new GamutOptions { Matrix = GamutMeter.Coefficients(matrix) }), depth, 255);
+    }
+
+    // The tables are shared by the meters made with the same depth, range, limits and matrix: a meter made after one
+    // with other options gets its own, and one made again with the first's options the first's arithmetic.
+    [Fact]
+    public void SharedTablesFollowTheOptions()
+    {
+        GamutMeter Make(GamutOptions o, bool full = false) => new(256, 1, ChromaSubsampling.Yuv444, 8, full, o);
+        var options = new GamutOptions[]
+        {
+            new(),
+            new() { Low = 0, High = 1 },
+            new() { Low = -0.05, High = 1.0 },
+            new() { Matrix = GamutMeter.Coefficients("bt2020nc") },
+            new() { Low = -0.0, High = 1 },
+        };
+        foreach (var o in options)
+        {
+            AssertTableIsArithmetic(Make(o), 8, 15);
+            AssertTableIsArithmetic(Make(o, full: true), 8, 15);
+        }
+
+        foreach (var o in options)
+            AssertTableIsArithmetic(Make(o), 8, 15);
+
+        // The limits narrowed: some pixel the default counts in is out.
+        var wide = Make(new GamutOptions());
+        var narrow = Make(new GamutOptions { Low = 0, High = 1 });
+        Assert.Contains(Enumerable.Range(0, 256), y => wide.InGamut(y, 128, 200) != narrow.InGamut(y, 128, 200));
+    }
+
+    static void AssertTableIsArithmetic(GamutMeter meter, int depth, int step)
+    {
+        int size = 1 << depth;
+        int bytes = depth > 8 ? 2 : 1;
+
+        // Over 8 bits, the codes with bits above the depth set: the meter masks them off.
+        byte[] Samples(Func<int, int> code)
+        {
+            var b = new byte[size * bytes];
+            for (int i = 0; i < size; i++)
+            {
+                if (bytes == 1)
+                    b[i] = (byte)code(i);
+                else
+                    BitConverter.TryWriteBytes(b.AsSpan(2 * i), (ushort)(code(i) | (i % 3 == 0 ? 0xF000 & ~(size - 1) : 0)));
+            }
+
+            return b;
+        }
+
+        byte[] luma = Samples(i => i);
+        for (int cb = 0; cb < size; cb += step)
+        {
+            for (int cr = 0; cr < size; cr += step)
+            {
+                meter.Add(0, luma, size * bytes, Samples(_ => cb), size * bytes, Samples(_ => cr), size * bytes);
+                int outside = Enumerable.Range(0, size).Count(y => !meter.InGamut(y, cb, cr));
+                Assert.Equal((double)outside / size, meter.Shares[^1]);
+            }
+        }
+    }
+
     [Fact]
     public void RefusesWhatItCantMeter()
     {

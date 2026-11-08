@@ -130,7 +130,8 @@ public sealed class LoudnessMeter
             _channel = new float[count];
         for (int c = 0; c < _channels; c++)
         {
-            double peak = _samplePeaks[c];
+            // The sample peak as ebur128's (FFMAX: a NaN dropped) and as the true peak's (Math.Max: a NaN kept), in one pass.
+            double peak = _samplePeaks[c], largest = 0;
             long full = 0;
             for (int i = 0; i < count; i++)
             {
@@ -138,13 +139,14 @@ public sealed class LoudnessMeter
                 _channel[i] = s;
                 double a = Math.Abs((double)s);
                 peak = peak > a ? peak : a; // FFMAX
+                largest = Math.Max(largest, a);
                 if (a >= 1)
                     full++;
             }
 
             _samplePeaks[c] = peak;
             _fullScale[c] += full;
-            _truePeaks[c].Add(_channel.AsSpan(0, count));
+            _truePeaks[c].Add(_channel.AsSpan(0, count), largest);
         }
 
         for (int i = 0; i < count; i++)

@@ -303,6 +303,117 @@ public class AudioAnalysisTests
         }
     }
 
+    // With loudness and another analysis the loudness graph runs on a thread of its own: what fails there is thrown on
+    // the caller's thread, as the same exception the one-thread pass throws, and nothing is left behind.
+    [Fact]
+    public void LoudnessThreadFailureIsTheCallersException()
+    {
+        if (Libs is null)
+            return;
+        string dir = Directory.CreateTempSubdirectory("framereader-analysis-").FullName;
+        try
+        {
+            string path = Make(dir, "s16.wav", $"-f lavfi -i {Stereo} -c:a pcm_s16le");
+            const string Bad = "ebur128=peak=true+sample,nosuchfilter";
+
+            // The graph doesn't build (on the first frame): FrameReaderException, InvalidInput, alone and with others.
+            foreach (var options in new AudioAnalysisOptions[] { new() { Loudness = true }, new() { Loudness = true, Waveform = Waveform } })
+            {
+                using var a = new AudioReader(path);
+                var e = Assert.Throws<FrameReaderException>(() => AudioAnalysis.RunCore(a, options, default, Bad, null));
+                Assert.Equal(FrameReaderError.InvalidInput, e.Reason);
+            }
+
+            // A failure mid-run on the loudness thread: that very exception, and the pass stops.
+            using (var a = new AudioReader(path))
+            {
+                var thrown = new FrameReaderException(FrameReaderError.DecodeFailed, "mid-run");
+                int frames = 0;
+                Assert.Same(thrown,
+                    Assert.Throws<FrameReaderException>(() => AudioAnalysis.RunCore(a,
+                        new() { Loudness = true, Waveform = Waveform, Silence = Silence },
+                        default,
+                        Loudness.Graph,
+                        () =>
+                        {
+                            if (++frames == 20)
+                                throw thrown;
+                        })));
+                Assert.Equal(20, frames);
+            }
+
+            Assert.Equal(0, LoudnessThread.Held);
+            Assert.Equal(0, LoudnessThread.Running);
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
+    public void CancelledMidRunOnTheLoudnessThread()
+    {
+        if (Libs is null)
+            return;
+        string dir = Directory.CreateTempSubdirectory("framereader-analysis-").FullName;
+        try
+        {
+            string path = Make(dir, "s16.wav", $"-f lavfi -i {Stereo} -c:a pcm_s16le");
+            long all;
+            using (var a = new AudioReader(path))
+            {
+                AudioAnalysis.Run(a, new() { Waveform = Waveform });
+                all = a.PacketsRead;
+            }
+
+            // Cancelled from the loudness thread while the caller's thread decodes: both stop, within a queue's length.
+            using (var a = new AudioReader(path))
+            using (var cts = new CancellationTokenSource())
+            {
+                int frames = 0, chunks = 0;
+                Assert.ThrowsAny<OperationCanceledException>(() => AudioAnalysis.RunCore(a,
+                    new() { Loudness = true, Waveform = Waveform, Chunks = _ => chunks++ },
+                    cts.Token,
+                    Loudness.Graph,
+                    () =>
+                    {
+                        if (++frames == 10)
+                            cts.Cancel();
+                    }));
+                Assert.Equal(10, frames);
+                Assert.InRange(a.PacketsRead, 10, 10 + LoudnessThread.Depth + 2);
+                Assert.True(a.PacketsRead < all);
+            }
+
+            // Cancelled from the caller's thread (the callback), while the loudness thread works.
+            using (var a = new AudioReader(path))
+            using (var cts = new CancellationTokenSource())
+            {
+                int chunks = 0;
+                Assert.ThrowsAny<OperationCanceledException>(() => AudioAnalysis.Run(a,
+                    new()
+                    {
+                        Loudness = true,
+                        Chunks = _ =>
+                        {
+                            if (++chunks == 10)
+                                cts.Cancel();
+                        },
+                    },
+                    cts.Token));
+                Assert.Equal(10, chunks);
+            }
+
+            Assert.Equal(0, LoudnessThread.Held);
+            Assert.Equal(0, LoudnessThread.Running);
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
     sealed class Sync(Action<MediaProgress> report) : IProgress<MediaProgress>
     {
         public void Report(MediaProgress value) => report(value);

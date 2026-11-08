@@ -507,7 +507,9 @@ largest value, truncated; the finder takes floats, as FFmpeg's decoders give AAC
 Several analyses on one decode: `AudioAnalysis.Run(audioReader, options)` runs reference tone, the waveform, loudness
 and silences (each one given its options) over one pass of the reader, each result the one its own call gives on a
 reader opened with the same options, to the bit. Loudness reads the decoded audio, as `Loudness.Measure` does; the
-others the reader's chunks, at its rate and channels. `Chunks` hands the same chunks to your own analysis. A tone search
+others the reader's chunks, at its rate and channels; with loudness and any other, the loudness graph runs on a thread
+of its own beside the conversion, so the pass takes about as long as the slower of the two. `Chunks` hands the same
+chunks to your own analysis (on the calling thread). A tone search
 alone stops decoding where `ReferenceTone.Find` stops; bad options fail before reading. Conversion stays its own pass,
 since a notch for the tone needs to know where the tone is:
 
@@ -598,7 +600,8 @@ and 4:4:4, odd sizes.
 counts (its RGB conversions clip): each pixel's R, G and B from its Y and the chroma sample it is sited on, by the
 matrix's Kr and Kb (`GamutOptions.Matrix`; `Coefficients(colorSpace)` for ffprobe's color_space; else BT.709, BT.601
 under 720 lines), a frame's share of those outside `Low` to `High` in `Shares`. A table of each chroma pair's run of Y
-codes in gamut makes a pixel one lookup; 8 to 12 bits. Checked against a geq expression doing the same arithmetic per
+codes in gamut makes a pixel one lookup, built once for each depth, range, limits and matrix and shared by the
+meters made with them; 8 to 12 bits. Checked against a geq expression doing the same arithmetic per
 pixel, and signalstats' YAVG of its mask, at 8 and 10 bits, 4:2:0, 4:2:2 and 4:4:4, limited and full range.
 
 Test media without the ffmpeg executable: `TestMedia.Write(path, options)` makes a synthetic clip from FFmpeg's own
@@ -648,7 +651,9 @@ Reading frames against the ffmpeg executable's pipe and FFMpegCore (benchmarks/F
 BenchmarkDotNet, the first 500 frames of three films at whole size and at 160x90, weekly on GitHub's x64 and ARM
 runners): the current numbers are in the [latest runs](https://github.com/bisforboman/FrameReader/actions/workflows/frame-reader-bench.yml). Whole frames come out well ahead of both
 (no process, no pipe); small frames, where decoding is the cost, ahead or equal. FrameReader allocates next to
-nothing per frame (frames are views of FFmpeg's buffers); the pipe readers allocate per frame.
+nothing per frame (frames are views of FFmpeg's buffers); the pipe readers allocate per frame. The same runs time
+FrameReader's own paths: rotated, scaled and Yuv420p reads, a picture a second (`ReadAt`, `TryReadForwardTo`), the
+audio analyses on one decode, and the picture and loudness measures on generated frames and samples.
 
 ## Frame lifetime
 

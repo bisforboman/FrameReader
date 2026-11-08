@@ -145,6 +145,29 @@ public sealed unsafe class AudioFilter : IDisposable
     }
 
     /// <summary>
+    /// What the graph has for what it was given, thrown away (an analysis graph whose results are in <see cref="Result"/>):
+    /// <see cref="Receive"/> without copying the samples out.
+    /// </summary>
+    internal void Drain()
+    {
+        if (_out == null)
+            return;
+        while (!_ended)
+        {
+            ffmpeg.av_frame_unref(_result);
+            int got = ffmpeg.av_buffersink_get_frame(_out, _result);
+            if (got == ffmpeg.AVERROR_EOF)
+                _ended = true;
+            else if (got == ffmpeg.AVERROR(ffmpeg.EAGAIN))
+                break;
+            else if (got < 0)
+                Check(got, "filter");
+        }
+
+        ffmpeg.av_frame_unref(_result);
+    }
+
+    /// <summary>
     /// abuffer (the decoded format, timestamps in samples) -> the graph -> aformat to interleaved float (and the reader's
     /// rate and channels when set) -> abuffersink.
     /// </summary>

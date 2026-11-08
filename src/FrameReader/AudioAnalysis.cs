@@ -57,6 +57,9 @@ public sealed record AudioAnalysisResult(
 /// graph (the decoded audio, as <see cref="FrameReader.Loudness.Measure"/> reads it) and once through the reader's
 /// converter (its rate and channels, as <see cref="AudioReader.TryRead"/> gives them) to the others. A long programme's
 /// audio is then decoded once instead of once per analysis (docs/decisions/2026-11-03-audio-analyses-on-one-decode.md).
+/// With loudness and any other analysis the loudness graph runs on a thread of its own beside the conversion, given the
+/// same frames in the same order (docs/decisions/2026-11-07-audio-analysis-loudness-thread.md); the rest, the
+/// <see cref="AudioAnalysisOptions.Chunks"/> callback and progress included, on the calling thread.
 /// </summary>
 /// <example>
 /// <code>
@@ -84,7 +87,18 @@ public static class AudioAnalysis
     /// there were no samples.
     /// </exception>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.</exception>
-    public static unsafe AudioAnalysisResult Run(AudioReader audio, AudioAnalysisOptions options, CancellationToken cancellationToken = default)
+    public static AudioAnalysisResult Run(AudioReader audio, AudioAnalysisOptions options, CancellationToken cancellationToken = default) =>
+        RunCore(audio, options, cancellationToken, FrameReader.Loudness.Graph, null);
+
+    /// <summary>
+    /// <see cref="Run"/> with the loudness graph's text, and <paramref name="afterLoudnessFrame"/> called after each frame
+    /// the graph is given, on its thread (tests: a failure or a cancellation there).
+    /// </summary>
+    internal static unsafe AudioAnalysisResult RunCore(AudioReader audio,
+        AudioAnalysisOptions options,
+        CancellationToken cancellationToken,
+        string loudnessGraph,
+        Action? afterLoudnessFrame)
     {
         ArgumentNullException.ThrowIfNull(audio);
         ArgumentNullException.ThrowIfNull(options);
@@ -100,8 +114,13 @@ public static class AudioAnalysis
         var chunks = options.Chunks;
         if (options.Loudness && ffmpeg.avfilter_get_by_name("ebur128") == null)
             throw new FrameReaderException(FrameReaderError.InvalidInput, "These FFmpeg libraries leave out the ebur128 filter that loudness needs.");
-        using var loudness = options.Loudness ? new AudioFilter(audio, FrameReader.Loudness.Graph) : null;
+        using var loudness = options.Loudness ? new AudioFilter(audio, loudnessGraph) : null;
         bool converts = tone is not null || waveform is not null || silence is not null || chunks is not null;
+
+        // Loudness with any of the others: the graph (the heaviest stage, ebur128's 192 kHz true peak) on a thread of
+        // its own, given the same frames in the same order, while this one converts. Loudness alone stays here: there
+        // is nothing to do beside it.
+        using var thread = loudness is not null && converts ? new LoudnessThread(loudness, afterLoudnessFrame, cancellationToken) : null;
 
         // Tone with a search duration, alone: decoding stops where its own call stops.
         bool OnlyToneLeft() => tone is { IsComplete: true } && waveform is null && silence is null && chunks is null && loudness is null;
@@ -127,12 +146,15 @@ public static class AudioAnalysis
             }
 
             var frame = audio.Decoded;
-            if (loudness is not null)
+            if (thread is not null)
+            {
+                thread.Add(frame, skip, position);
+            }
+            else if (loudness is not null)
             {
                 loudness.Add(frame, skip, position);
-                while (loudness.Receive(out _))
-                {
-                }
+                loudness.Drain();
+                afterLoudnessFrame?.Invoke();
             }
 
             if (converts && audio.ConvertDecoded(skip, position, out var chunk))
@@ -143,9 +165,14 @@ public static class AudioAnalysis
         LoudnessResult? measured = null;
         if (loudness is not null)
         {
-            loudness.End();
-            while (loudness.Receive(out _))
+            if (thread is not null)
             {
+                thread.Finish();
+            }
+            else
+            {
+                loudness.End();
+                loudness.Drain();
             }
 
             measured = FrameReader.Loudness.Result(loudness);

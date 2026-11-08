@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
+using System.Runtime.Intrinsics.X86;
 using FFmpeg.AutoGen;
 
 namespace FrameReader;
@@ -265,23 +267,70 @@ public sealed class FreezeDetector
         ulong sad = 0;
         for (int r = 0; r < height; r++)
         {
-            if (wide)
-            {
-                var x = MemoryMarshal.Cast<byte, ushort>(a.Slice(r * aStride, 2 * width));
-                var y = MemoryMarshal.Cast<byte, ushort>(b.Slice(r * bStride, 2 * width));
-                for (int i = 0; i < width; i++)
-                    sad += (ulong)Math.Abs(x[i] - y[i]);
-                continue;
-            }
+            sad += wide
+                ? Sad(MemoryMarshal.Cast<byte, ushort>(a.Slice(r * aStride, 2 * width)), MemoryMarshal.Cast<byte, ushort>(b.Slice(r * bStride, 2 * width)))
+                : Sad(a.Slice(r * aStride, width), b.Slice(r * bStride, width));
+        }
 
-            var p = a.Slice(r * aStride, width);
-            var q = b.Slice(r * bStride, width);
-            int k = 0;
+        return sad;
+    }
+
+    /// <summary>
+    /// The sum of absolute differences of two rows of bytes: x86's psadbw (each 8 bytes' sum in a 64-bit lane), ARM's
+    /// absolute differences added pairwise into 32-bit lanes, elsewhere the differences widened to 64 bits.
+    /// </summary>
+    internal static ulong Sad(ReadOnlySpan<byte> p, ReadOnlySpan<byte> q)
+    {
+        int n = p.Length, k = 0;
+        ref byte x = ref MemoryMarshal.GetReference(p);
+        ref byte y = ref MemoryMarshal.GetReference(q);
+        ulong sad = 0;
+        if (Avx512BW.IsSupported && n >= 64)
+        {
+            var lanes = Vector512<ulong>.Zero;
+            for (; k + 64 <= n; k += 64)
+                lanes += Avx512BW.SumAbsoluteDifferences(Vector512.LoadUnsafe(ref x, (nuint)k), Vector512.LoadUnsafe(ref y, (nuint)k)).AsUInt64();
+            sad += Vector512.Sum(lanes);
+        }
+
+        if (Avx2.IsSupported && n - k >= 32)
+        {
+            var lanes = Vector256<ulong>.Zero;
+            for (; k + 32 <= n; k += 32)
+                lanes += Avx2.SumAbsoluteDifferences(Vector256.LoadUnsafe(ref x, (nuint)k), Vector256.LoadUnsafe(ref y, (nuint)k)).AsUInt64();
+            sad += Vector256.Sum(lanes);
+        }
+
+        if (Sse2.IsSupported)
+        {
             var lanes = Vector128<ulong>.Zero;
-            for (; k + 16 <= width; k += 16)
+            for (; k + 16 <= n; k += 16)
+                lanes += Sse2.SumAbsoluteDifferences(Vector128.LoadUnsafe(ref x, (nuint)k), Vector128.LoadUnsafe(ref y, (nuint)k)).AsUInt64();
+            sad += Vector128.Sum(lanes);
+        }
+        else if (AdvSimd.IsSupported)
+        {
+            // Each 32-bit lane gains at most 4 × 255 a step: a run of 2^20 steps can't overflow it.
+            while (k + 16 <= n)
             {
-                var u = Vector128.Create(p.Slice(k, 16));
-                var v = Vector128.Create(q.Slice(k, 16));
+                var lanes = Vector128<uint>.Zero;
+                for (int stop = (int)Math.Min(n, k + (16L << 20)); k + 16 <= stop; k += 16)
+                {
+                    var d = AdvSimd.AbsoluteDifference(Vector128.LoadUnsafe(ref x, (nuint)k), Vector128.LoadUnsafe(ref y, (nuint)k));
+                    lanes = AdvSimd.AddPairwiseWideningAndAdd(lanes, AdvSimd.AddPairwiseWidening(d));
+                }
+
+                var (lo, hi) = Vector128.Widen(lanes);
+                sad += Vector128.Sum(lo + hi);
+            }
+        }
+        else
+        {
+            var lanes = Vector128<ulong>.Zero;
+            for (; k + 16 <= n; k += 16)
+            {
+                var u = Vector128.LoadUnsafe(ref x, (nuint)k);
+                var v = Vector128.LoadUnsafe(ref y, (nuint)k);
                 var (lo, hi) = Vector128.Widen(Vector128.Max(u, v) - Vector128.Min(u, v));
                 var (l1, l2) = Vector128.Widen(lo + hi);
                 var (w1, w2) = Vector128.Widen(l1 + l2);
@@ -289,10 +338,60 @@ public sealed class FreezeDetector
             }
 
             sad += Vector128.Sum(lanes);
-            for (; k < width; k++)
-                sad += (ulong)Math.Abs(p[k] - q[k]);
         }
 
+        for (; k < n; k++)
+            sad += (ulong)Math.Abs(p[k] - q[k]);
+        return sad;
+    }
+
+    /// <summary>
+    /// The sum of absolute differences of two rows of 16-bit samples: each lane's max - min widened to 32 bits, summed in
+    /// runs short enough not to overflow them, then to 64.
+    /// </summary>
+    internal static ulong Sad(ReadOnlySpan<ushort> p, ReadOnlySpan<ushort> q)
+    {
+        // Each 32-bit lane gains at most 2 × 65535 a step: a run of 2^14 steps can't overflow it.
+        const int Run = 1 << 14;
+        int n = p.Length, k = 0;
+        ref ushort x = ref MemoryMarshal.GetReference(p);
+        ref ushort y = ref MemoryMarshal.GetReference(q);
+        ulong sad = 0;
+        if (Vector256.IsHardwareAccelerated)
+        {
+            while (k + 16 <= n)
+            {
+                var lanes = Vector256<uint>.Zero;
+                for (int stop = (int)Math.Min(n, k + (16L * Run)); k + 16 <= stop; k += 16)
+                {
+                    var u = Vector256.LoadUnsafe(ref x, (nuint)k);
+                    var v = Vector256.LoadUnsafe(ref y, (nuint)k);
+                    var (lo, hi) = Vector256.Widen(Vector256.Max(u, v) - Vector256.Min(u, v));
+                    lanes += lo + hi;
+                }
+
+                var (l1, l2) = Vector256.Widen(lanes);
+                sad += Vector256.Sum(l1 + l2);
+            }
+        }
+
+        while (k + 8 <= n)
+        {
+            var lanes = Vector128<uint>.Zero;
+            for (int stop = (int)Math.Min(n, k + (8L * Run)); k + 8 <= stop; k += 8)
+            {
+                var u = Vector128.LoadUnsafe(ref x, (nuint)k);
+                var v = Vector128.LoadUnsafe(ref y, (nuint)k);
+                var (lo, hi) = Vector128.Widen(Vector128.Max(u, v) - Vector128.Min(u, v));
+                lanes += lo + hi;
+            }
+
+            var (l1, l2) = Vector128.Widen(lanes);
+            sad += Vector128.Sum(l1 + l2);
+        }
+
+        for (; k < n; k++)
+            sad += (ulong)Math.Abs(p[k] - q[k]);
         return sad;
     }
 }

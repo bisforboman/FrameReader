@@ -2,3 +2,19 @@
 
 Rows moved from [backlog.md](backlog.md) when Done, Dropped or Won't do, oldest first. Those from before 2026-11-07
 are in [ShotDetector's backlog-done.md](https://github.com/bisforboman/shotdetector/blob/main/docs/backlog-done.md).
+
+- Benchmarks for FrameReader's own paths: rotated, scaled and Yuv420p reads (ReadPaths), a picture a second (Sampling), the audio analyses (AudioAnalyses) and the managed measures (PictureMeasures, AudioMeasures), in frame-reader-bench.yml's weekly run
+  - Why: the benchmark timed only reading frames against ffmpeg's pipe, so the performance work of 2026-11-07 couldn't be measured (docs/decisions/2026-11-07-performance-work.md)
+  - Status: Done (2026-11-07)
+
+- Vectorise FrameDecoder's rotation: `Orient`'s hflip and transpose with Vector128 shuffles and blocks, and a buffer pool for its output
+  - Why: a display rotation of 90 or 270 degrees (phone video) moves one sample at a time; at 1080p that costs more than decoding the frame, and the rotated read of ReadPaths takes about twice the plain one (docs/decisions/2026-11-07-performance-work.md)
+  - Status: Done (2026-11-07)
+
+- Faster measures: GamutMeter's table, FreezeDetector's SAD, TruePeakMeter's interpolation
+  - Why: GamutMeter rebuilds its table for every meter (64 MB and most of a second at 12 bits); FreezeDetector's sum of differences widens bytes three times and is scalar above 8 bits (much slower at 10 bits than at 8); TruePeakMeter interpolates one point at a time. Integer sums, a cache, and vectors that keep each point's order: the same results (docs/decisions/2026-11-07-performance-work.md)
+  - Status: Done (2026-11-07)
+
+- AudioAnalysis: the loudness graph on its own thread, fed references of the decoded frames, while the caller's thread converts for the other analyses
+  - Why: ebur128 with true peaks (192 kHz inside the filter) and the conversion for tone, waveform and silences run one after the other on one thread; up to twice as fast when loudness and another analysis are asked for (docs/decisions/2026-11-07-performance-work.md)
+  - Status: Done (2026-11-07): the pass takes about as long as loudness alone (docs/decisions/2026-11-07-audio-analysis-loudness-thread.md)
