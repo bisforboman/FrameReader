@@ -317,11 +317,12 @@ public sealed class LoudnessMeter
         double power400 = _i400.Power(_weights), power3000 = _i3000.Power(_weights);
         double loudness400 = Lufs(power400), loudness3000 = Lufs(power3000);
 
-        // The block's M and S, as ebur128's framelog prints them every 100 ms.
+        // The block's M and S, as ebur128's framelog prints them every 100 ms, once their window is full: before it,
+        // ebur128 prints the 1e-12 it starts the power at (-120.691 LUFS), which is no reading of the samples.
         _blocks++;
-        if (loudness400 > _maxMomentary)
+        if (_i400.Filled && loudness400 > _maxMomentary)
             (_maxMomentary, _maxMomentaryBlock) = (loudness400, _blocks);
-        if (loudness3000 > _maxShortTerm)
+        if (_i3000.Filled && loudness3000 > _maxShortTerm)
             (_maxShortTerm, _maxShortTermBlock) = (loudness3000, _blocks);
         if (loudness400 >= AbsoluteGate)
         {
@@ -388,6 +389,9 @@ public sealed class LoudnessMeter
         bool _filled;
         double _keptPowers;
         int _kept;
+
+        /// <summary>Whether the cache holds a whole window of squares (the block's loudness is a reading).</summary>
+        public bool Filled => _filled;
 
         /// <summary>The cache slot of the next instant; full once the cache wraps.</summary>
         public int Next()

@@ -13,17 +13,19 @@ namespace FrameReader;
 public readonly record struct LoudnessResult(double Integrated, double Range, double RangeLow, double RangeHigh, double SamplePeak, double TruePeak)
 {
     /// <summary>
-    /// The highest momentary loudness in LUFS (M: the 400 ms block, every 100 ms, as ebur128's framelog prints it);
-    /// <see cref="LoudnessMeter"/>'s, NaN from <see cref="Loudness.Measure"/> (the filter keeps no maximum).
+    /// The highest momentary loudness in LUFS (M: the 400 ms block, every 100 ms, as ebur128's framelog prints it, once
+    /// 400 ms of samples fill the block); <see cref="LoudnessMeter"/>'s, negative infinity when the samples never fill
+    /// one (shorter than the block: ebur128 prints -120.7 there, its starting 1e-12), NaN from
+    /// <see cref="Loudness.Measure"/> (the filter keeps no maximum).
     /// </summary>
     public double MaxMomentary { get; init; } = double.NaN;
 
-    /// <summary>The highest short-term loudness in LUFS (S: the 3 s block, every 100 ms); as <see cref="MaxMomentary"/>.</summary>
+    /// <summary>The highest short-term loudness in LUFS (S: the 3 s block, every 100 ms, once 3 s fill it); as <see cref="MaxMomentary"/>.</summary>
     public double MaxShortTerm { get; init; } = double.NaN;
 
     /// <summary>
     /// When the block of <see cref="MaxMomentary"/> ends, from the first sample (the first such block, every 100 ms; the
-    /// time ebur128's framelog prints beside it, to a sample); null from <see cref="Loudness.Measure"/>, or with no block.
+    /// time ebur128's framelog prints beside it, to a sample); null from <see cref="Loudness.Measure"/>, or with no full block.
     /// </summary>
     public TimeSpan? MaxMomentaryAt { get; init; }
 
