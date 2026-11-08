@@ -9,7 +9,7 @@ using FrameReader;
 /// BS.1770-4 Annex 2's, not ebur128's (docs/decisions/2026-10-31-frame-reader-measures.md): within 0.05 dB of an ideal
 /// reconstruction (tools/true_peak_reference.py on the same clips, the numbers below) and, on audio without energy near
 /// Nyquist, within 0.1 dB of ebur128's. The highest momentary and short-term loudness are the highest M and S its
-/// framelog prints every 100 ms (to one decimal: within 0.05 LU). Needs SHOTDETECTOR_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg);
+/// framelog prints every 100 ms once their window is full (to one decimal: within 0.05 LU). Needs SHOTDETECTOR_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg);
 /// without it these do nothing.
 /// </summary>
 public class LoudnessMeterTests
@@ -118,14 +118,25 @@ public class LoudnessMeterTests
                     Assert.InRange(r.TruePeak, ffmpeg.TruePeak - 0.1, ffmpeg.TruePeak + 0.1);
             }
 
+            // The highest of the blocks whose window is full, and ebur128 prints it there; none when no block fills.
             var blocks = Blocks(path);
-            double m = blocks.Max(b => b.M), s = blocks.Max(b => b.S);
-            Near(m, r.MaxMomentary);
-            Near(s, r.MaxShortTerm);
+            void Loudest(double window, Func<(double T, double M, double S), double> value, double max, TimeSpan? at)
+            {
+                var full = blocks.Where(b => b.T > window - 0.001).ToList();
+                if (full.Count == 0)
+                {
+                    Assert.Equal(double.NegativeInfinity, max);
+                    Assert.Null(at);
+                    return;
+                }
 
-            // When: ebur128 prints the highest there.
-            Assert.Equal(m, BlockAt(blocks, r.MaxMomentaryAt).M);
-            Assert.Equal(s, BlockAt(blocks, r.MaxShortTermAt).S);
+                double highest = full.Max(value);
+                Near(highest, max);
+                Assert.Equal(highest, value(BlockAt(full, at)));
+            }
+
+            Loudest(0.4, b => b.M, r.MaxMomentary, r.MaxMomentaryAt);
+            Loudest(3, b => b.S, r.MaxShortTerm, r.MaxShortTermAt);
             Assert.Null(ffmpeg.MaxMomentaryAt);
             Assert.True(double.IsNaN(ffmpeg.MaxMomentary) && double.IsNaN(ffmpeg.MaxShortTerm));
             Assert.Equal(r.SamplePeak, measures.Channels.Max(c => c.SamplePeak));
@@ -149,6 +160,47 @@ public class LoudnessMeterTests
             var (loudness, channels) = Measure(samples, 48000, 2, chunk);
             Assert.Equal(whole.Item1, loudness);
             Assert.Equal(whole.Item2, channels);
+        }
+    }
+
+    // The loudest M and S only from blocks whose window is full: none from samples too short to fill it, and digital
+    // silence's from the first full block, not the first block's -120.691 LUFS.
+    [Theory]
+    [InlineData(48000, 350, false, false)]
+    [InlineData(48000, 400, true, false)]
+    [InlineData(48000, 2999, true, false)]
+    [InlineData(48000, 3000, true, true)]
+    [InlineData(44100, 3000, true, true)]
+    public void LoudestOnlyFromFullBlocks(int rate, int milliseconds, bool momentary, bool shortTerm)
+    {
+        foreach (bool silent in (bool[])[false, true])
+        {
+            var samples = new float[rate * 2 * milliseconds / 1000];
+            if (!silent)
+                Noise(rate, 2, 4).AsSpan(0, samples.Length).CopyTo(samples);
+            var meter = new LoudnessMeter(rate, 2);
+            meter.Add(samples);
+            var r = meter.Finish().Loudness;
+            Check(momentary, r.MaxMomentary, r.MaxMomentaryAt, 0.4);
+            Check(shortTerm, r.MaxShortTerm, r.MaxShortTermAt, 3);
+
+            void Check(bool full, double max, TimeSpan? at, double window)
+            {
+                if (!full)
+                {
+                    Assert.Equal(double.NegativeInfinity, max);
+                    Assert.Null(at);
+                    return;
+                }
+
+                // A full block of digital silence is ebur128's 1e-12 over the window's samples, under the -120.691 LUFS
+                // of a block not yet full, which therefore can't be the loudest.
+                Assert.True(silent ? max < -120.691 : max > -120.691, $"{max}");
+                Assert.NotNull(at);
+                Assert.True(at.Value.TotalSeconds >= window - 1e-9, $"{at}");
+                if (silent)
+                    Assert.Equal(window, at.Value.TotalSeconds, 6);
+            }
         }
     }
 
