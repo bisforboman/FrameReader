@@ -12,6 +12,8 @@ dotnet add package FrameReader.Native.linux-x64   # FFmpeg's libraries for your 
 - What it does and how to use it: [src/FrameReader/README.md](src/FrameReader/README.md), the package's front page.
 - Releases: [src/FrameReader/CHANGELOG.md](src/FrameReader/CHANGELOG.md).
 - Our FFmpeg build: [src/FrameReader.Native/README.md](src/FrameReader.Native/README.md).
+- Coming from FFMpegCore: [docs/coming-from-ffmpegcore.md](docs/coming-from-ffmpegcore.md), and an ASP.NET Core
+  thumbnail API in [examples/ThumbnailApi](examples/ThumbnailApi).
 
 FrameReader began as [ShotDetector](https://github.com/bisforboman/shotdetector)'s in-process decoding and lived in
 its repository until 2026-11-07; its history came with it. MIT ([LICENSE](LICENSE)); FFmpeg's libraries, in the

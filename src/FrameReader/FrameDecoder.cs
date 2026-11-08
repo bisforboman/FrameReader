@@ -130,9 +130,9 @@ public sealed unsafe class FrameDecoder : IDisposable
     }
 
     /// <summary>
-    /// Opens the bytes a stream gives, read once from where it is (not seekable, as ffmpeg reads a pipe): the headers
-    /// must come first (mkv, webm, ts, mov or a faststart mp4). Frame times are the stream's own; see
-    /// <see cref="StartOffset"/> for ffmpeg's shift to 0.
+    /// Opens the bytes a stream gives, from where it is: as a file when it can seek (a FileStream, a MemoryStream: any
+    /// MP4), else read once, as ffmpeg reads a pipe (headers first: mkv, webm, ts, mov or a faststart mp4). Frame times
+    /// are the stream's own; see <see cref="StartOffset"/> for ffmpeg's shift to 0.
     /// </summary>
     /// <param name="stream">The media's bytes; not disposed.</param>
     /// <param name="options">How to decode; null: the defaults.</param>
