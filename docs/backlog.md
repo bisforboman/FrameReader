@@ -47,6 +47,18 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
   - Why: every `FrameFormat` is 8-bit, so a 10-bit ProRes or HDR source loses its low bits before the caller sees it, and ML input (the library's design doc names it) converts each 8-bit frame to float again in managed code
   - Status: Open
 
+- Trimming with stream copy: `Remux.Copy` with a start and an end, as ffmpeg's `-ss S -to E -i in -c copy` (keyframe-aligned start as there), checked against ffmpeg's output packet for packet
+  - Why: the one FFMpegCore job (`FFMpeg.SubVideo`) FrameReader lacks; docs/coming-from-ffmpegcore.md says "not yet" (#11)
+  - Status: Open
+
+- A read-once Stream of a moov-last MP4: fail with `FrameReaderException` (`InvalidInput`) where ffmpeg fails, instead of giving no frames
+  - Why: since #11 a seekable Stream opens it, but one that can't seek (a network or request stream) still ends without a frame and without an error once the mdat is past the 64 KB buffer, where `ffmpeg -i -` fails (`partial file`, then no stream to read); a silent empty read looks like an empty video
+  - Status: Open
+
+- `FrameDecoder.CanReadAgain` for seekable Streams
+  - Why: it's false for every Stream (`_io == null`), so `VideoFrameReader`'s look-ahead (`TryReadForwardTo`, `ReadAt`) skips ahead less on a FileStream or MemoryStream than on the same file's path, though since #11 such a stream seeks as the file does; needs the look-ahead's tests run on a seekable Stream too
+  - Status: Open
+
 ## Waiting
 
 - The owner sets up the repository: branch protection on main (required checks `build` and `CI passed`), auto-merge, the environments `release` (with approval) and `prerelease`, the `NUGET_USER` variable, the nuget.org trusted publishing policy (workflow `release.yml`, package glob `FrameReader*`), and the transfer of ShotDetector's open `framereader` issues

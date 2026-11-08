@@ -26,6 +26,10 @@ requests go to [its repository](https://github.com/bisforboman/FrameReader). It 
 FFmpeg's libraries are LGPL and loaded dynamically
 ([FFmpeg's libraries](#ffmpegs-libraries)).
 
+Coming from FFMpegCore: [each of its jobs next to FrameReader's code](https://github.com/bisforboman/FrameReader/blob/main/docs/coming-from-ffmpegcore.md)
+(probe, thumbnails, frames into memory, stream copy, input from a Stream), and an
+[ASP.NET Core thumbnail API](https://github.com/bisforboman/FrameReader/tree/main/examples/ThumbnailApi).
+
 ## Quick start
 
 ```csharp
@@ -663,8 +667,9 @@ holds its decoded buffers until disposed, after the reader or decoder too.
 
 ## What it handles
 
-- Files, image sequence patterns (`frames/%04d.png`, with `InputOptions` `framerate`), and `Stream`s (headers first:
-  mkv, webm, ts, mov or a faststart mp4).
+- Files, image sequence patterns (`frames/%04d.png`, with `InputOptions` `framerate`), and `Stream`s: one that can
+  seek (a `FileStream`, a `MemoryStream`) as a file, so any MP4, its moov at the end too; any other read once, as
+  ffmpeg reads a pipe (headers first: mkv, webm, ts, mov or a faststart mp4).
 - An rtsp server's side: `InputOptions` `rtsp_flags` = `listen` waits for a publisher to push to the URL. FFmpeg 8.1's
   own default `listen_timeout` (-1, wait forever) fails to open the input ("Numerical result out of range", on the
   command line too), so FrameReader passes `listen_timeout` = `0`, the same wait without end, when you set none (your
