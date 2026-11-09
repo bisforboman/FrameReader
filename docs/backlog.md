@@ -13,7 +13,7 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
 
 - The first release from this repository: a prerelease (2.26.0-pre), then the next stable version
   - Why: checks the nuget.org trusted publishing policy for this repository, the environments and the native packages before a stable release depends on them (ShotDetector's docs/framereader-split.md, step 5)
-  - Status: Open (waits on the owner's settings, below)
+  - Status: In progress (the owner, 2026-11-09: straight to 2.26.0, without the prerelease; its release run waits for the owner's approval)
 
 - The ShotDetector parity check on pull requests: pack the PR's FrameReader to a local feed, build ShotDetector's main against it, run its tests and its scenedetect comparison
   - Why: since the move a FrameReader change reaches ShotDetector's comparison only once released; this catches a change that moves ShotDetector's results before it merges (ShotDetector's docs/framereader-split.md, step 4). Needs ShotDetector to take FrameReader as a package with an overridable version (its step 6) first
