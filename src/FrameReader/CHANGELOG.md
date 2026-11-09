@@ -1,11 +1,48 @@
 # FrameReader changelog
 
-FrameReader's versions are git tags (`framereader-vX.Y.Z`); each one publishes the FrameReader package and a GitHub
-release. Semantic versioning: a breaking change to its public API is a major version. What's merged but not released
-yet is in changes/framereader/ (one file per pull request).
+FrameReader's versions are git tags (`vX.Y.Z`; up to 2.25.0 `framereader-vX.Y.Z` in ShotDetector's repository); each
+one publishes the FrameReader package and a GitHub release. Semantic versioning: a breaking change to its public API is
+a major version. What's merged but not released yet is in changes/framereader/ (one file per pull request).
 
 Up to 2.1.0, FrameReader was released together with ShotDetector at the same version: those versions' changes are in
 ShotDetector's [CHANGELOG.md](../../CHANGELOG.md), each marked "FrameReader:".
+
+## 2.26.0 – 2026-11-09
+
+Seekable Streams read as files, so any MP4 opens from memory; faster rotation, audio analysis and measures; the
+loudest momentary and short-term loudness only from full windows. The first release from FrameReader's own repository.
+
+### New
+
+- A `Stream` that can seek (a `FileStream`, a `MemoryStream`, such as an upload buffered in memory) is read as ffmpeg
+  reads a file: seekable and with its size known, from where it is when opened. `VideoFrameReader`, `FrameDecoder`,
+  `AudioReader` and `MediaProbe.Probe` then open an MP4 whose moov comes last (ffmpeg's default and most cameras'), which
+  read once gave no frames, and their probes, frames, seeks and audio are the file's. A stream that can't seek is read
+  once, as before, as ffmpeg reads a pipe.
+
+### Faster
+
+- `AudioAnalysis.Run`: with loudness and any other analysis, the loudness graph (ebur128 with its true peak, the
+  heaviest stage) runs on a thread of its own while the calling thread converts and runs the others, so the pass takes
+  about as long as the slower of the two instead of both together. Every result is the same as before, to the bit.
+- `GamutMeter`: the table of runs is built once for each depth, range, limits and matrix and shared by the meters made
+  with them (a file split into parallel ranges, a meter per file; the last few kept, up to 128 MB), and built on all
+  cores: a 12-bit meter no longer spends most of a second on it each time.
+- `FreezeDetector`: scene_sad by psadbw on x86 (pairwise widening adds on ARM) for 8-bit samples, and in vectors for
+  16-bit ones (formerly one sample at a time). The same sums.
+- `LoudnessMeter`: the true peak's interpolation in vectors across neighbouring points, each point's sum in the same
+  order, and the samples scanned once for both peaks. The same figures, NaN and infinite samples included.
+- `FrameDecoder` (and the readers on it): rotated video (a display rotation of 90, 180 or 270 degrees, or a flip, as
+  phone video has) turns with vector moves instead of one sample at a time, several times faster, the same bytes. A
+  frame held while the next is turned (`TakeFrame`, `ReadAhead`) gets its buffer from a pool rather than a fresh
+  allocation.
+
+### Fixed
+
+- `LoudnessMeter`: `MaxMomentary` and `MaxShortTerm` (and their times) come only from blocks whose 400 ms or 3 s
+  window is full. Before, a block before the window filled counted at ebur128's starting 1e-12 (-120.691 LUFS), so
+  samples shorter than the window gave -120.691 LUFS, and digital silence's time was the first block's. Now samples
+  that never fill the window give negative infinity and no time, as with no block at all.
 
 ## 2.25.0 – 2026-11-06
 
