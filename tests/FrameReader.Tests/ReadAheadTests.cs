@@ -239,12 +239,54 @@ public class ReadAheadTests
             }
 
             Assert.Equal(0, ReadAhead.Held); // every frame taken let go
+            Assert.Equal(0, FrameOutput.Alive); // and every conversion's buffer
 
             // Reading after Dispose is an error, not a hang.
             var disposed = new VideoFrameReader(path, new VideoFrameReaderOptions { ReadAhead = 2 });
             Assert.True(disposed.TryRead(out _));
             disposed.Dispose();
             Assert.Throws<ObjectDisposedException>(() => disposed.TryRead(out _));
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
+    // Frame after frame (TryRead), the thread converts the frames it reads ahead, so the caller's thread only hands them
+    // over; reads that pass frames over (TryReadForwardTo) or don't convert (TryTake) stop it, and the next TryRead goes on.
+    // That the bytes are those of converting in the read is FramesAreThoseWithout's.
+    [Fact]
+    public void TryReadConvertsAhead()
+    {
+        if (Libs is null)
+            return;
+        string dir = Directory.CreateTempSubdirectory("framereader-ahead-").FullName;
+        try
+        {
+            string path = Path.Combine(dir, "h264.mp4");
+            Ffmpeg("-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=320x240:r=25:d=4", "-c:v", "libx264", "-g", "25", path);
+            using var reader = new VideoFrameReader(path, new VideoFrameReaderOptions { Width = 160, Height = 120, ReadAhead = 3 });
+            for (int i = 0; i < 20; i++)
+                Assert.True(reader.TryRead(out _));
+            int converted = reader.ConvertedAhead;
+            Assert.InRange(converted, 15, 20); // every one, or all but a few decoded before
+
+            reader.WaitForReadAhead(); // converted, queued
+            Assert.True(reader.TryReadForwardTo(TimeSpan.FromSeconds(2), out var at2));
+            Assert.Equal(TimeSpan.FromSeconds(2), at2.Time);
+            for (int i = 0; i < 5; i++)
+            {
+                Assert.True(reader.TryTake(out var taken));
+                taken.Dispose();
+            }
+
+            int before = reader.ConvertedAhead;
+            Assert.InRange(before - converted, 0, 4); // at most the queue and the frame being decoded
+            reader.WaitForReadAhead(); // decoded without converting
+            for (int i = 0; i < 20; i++)
+                Assert.True(reader.TryRead(out _));
+            Assert.InRange(reader.ConvertedAhead - before, 15, 19);
         }
         finally
         {

@@ -27,10 +27,6 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
   - Why: names from ShotDetector's repository; kept for the move so nothing else changed. Rename in the tests, the workflows, the session-start hook and CLAUDE.md in one PR
   - Status: Open
 
-- Read-ahead: convert ahead too, for TryRead
-  - Why: `VideoFrameReaderOptions.ReadAhead` (#568, ShotDetector issue #566) decodes, deinterlaces and rotates frames ahead on a background thread but converts each frame in the read, because `TryReadForwardTo` only knows which frame it wants when asked. Plain `TryRead` wants every frame, so its conversion could run ahead too. The same swscale context on another thread, so the same bytes, unlike swscale's slice threads (Maybe, below); at whole size the conversion is most of what's left on the caller's thread. Moved from Maybe after the 2026-11-07 review of what's next
-  - Status: Open (the owner, 2026-11-07; Maybe since 2026-10-28)
-
 - The approximate speed options in the README: `CodecOptions` `skip_loop_filter` = `all` (ffmpeg's `-skip_loop_filter all` before `-i`) next to `FrameDecoderOptions`' keyframes only, with a test that the frames equal ffmpeg's with the same option
   - Why: `CodecOptions` already passes any decoder option, so analysis that can take a slightly different picture (motion, cuts, thumbnails) can decode H.264 and HEVC faster today, but nothing says so; a test keeps it the same as the command line, as the rest is
   - Status: Open
@@ -52,10 +48,6 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
   - Status: Open
 
 ## Waiting
-
-- The owner sets up the repository: branch protection on main (required checks `build` and `CI passed`), auto-merge, the environments `release` (with approval) and `prerelease`, the `NUGET_USER` variable, the nuget.org trusted publishing policy (workflow `release.yml`, package glob `FrameReader*`), and the transfer of ShotDetector's open `framereader` issues
-  - Why: a session can't change repository settings, nuget.org or another repository's issues
-  - Status: Waiting (on the owner)
 
 - Move to FFmpeg 9's libraries (FFmpeg.AutoGen 9, Native packages on 9.0.x) when opencv-python's Linux wheels bundle FFmpeg 9
   - Why: ShotDetector's scenedetect parity needs OpenCV's FFmpeg; moving earlier risks bytes OpenCV doesn't give, and drops system FFmpeg 8 in-process. ShotDetector's backlog has the same row

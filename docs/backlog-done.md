@@ -23,6 +23,14 @@ are in [ShotDetector's backlog-done.md](https://github.com/bisforboman/shotdetec
   - Why: checks the nuget.org trusted publishing policy for this repository, the environments and the native packages before a stable release depends on them (ShotDetector's docs/framereader-split.md, step 5)
   - Status: Released (2026-11-09). The first run stopped at the NuGet login (no `NUGET_USER` variable, and `release` didn't wait for approval); the owner set the variable, the policy and a reviewer, and the re-run published every package
 
+- The owner sets up the repository: branch protection on main (required checks `build` and `CI passed`), auto-merge, the environments `release` (with approval) and `prerelease`, the `NUGET_USER` variable, the nuget.org trusted publishing policy (workflow `release.yml`, package glob `FrameReader*`), and the transfer of ShotDetector's open `framereader` issues
+  - Why: a session can't change repository settings, nuget.org or another repository's issues
+  - Status: Done (2026-11-12, the owner)
+
+- Read-ahead: convert ahead too, for TryRead
+  - Why: `VideoFrameReaderOptions.ReadAhead` (#568, ShotDetector issue #566) decodes, deinterlaces and rotates frames ahead on a background thread but converts each frame in the read, because `TryReadForwardTo` only knows which frame it wants when asked. Plain `TryRead` wants every frame, so its conversion could run ahead too. The same swscale context on another thread, so the same bytes, unlike swscale's slice threads (Maybe, below); at whole size the conversion is most of what's left on the caller's thread. Moved from Maybe after the 2026-11-07 review of what's next
+  - Status: Done (2026-11-12): while `TryRead` reads frame after frame, the decoding thread converts with a FrameConverter of its own; the other reads convert in the read
+
 - At the next change to tools/native/build-ffmpeg.sh: its SBOM's documentNamespace to this repository's URL
   - Why: it still names github.com/bisforboman/shotdetector; any edit to the script rebuilds every platform's FFmpeg (the cache key), so it waits for a change that needs a rebuild anyway
   - Status: Done (2026-11-12), with the move to zlib 1.4 (#22)
