@@ -22,3 +22,7 @@ are in [ShotDetector's backlog-done.md](https://github.com/bisforboman/shotdetec
 - The first release from this repository: 2.26.0 (the owner, 2026-11-09: stable, without the planned 2.26.0-pre)
   - Why: checks the nuget.org trusted publishing policy for this repository, the environments and the native packages before a stable release depends on them (ShotDetector's docs/framereader-split.md, step 5)
   - Status: Released (2026-11-09). The first run stopped at the NuGet login (no `NUGET_USER` variable, and `release` didn't wait for approval); the owner set the variable, the policy and a reviewer, and the re-run published every package
+
+- At the next change to tools/native/build-ffmpeg.sh: its SBOM's documentNamespace to this repository's URL
+  - Why: it still names github.com/bisforboman/shotdetector; any edit to the script rebuilds every platform's FFmpeg (the cache key), so it waits for a change that needs a rebuild anyway
+  - Status: Done (2026-11-12), with the move to zlib 1.4 (#22)

@@ -230,7 +230,7 @@ pkg() {
 {
   printf '{\n  "spdxVersion": "SPDX-2.3", "dataLicense": "CC0-1.0", "SPDXID": "SPDXRef-DOCUMENT",\n'
   printf '  "name": "FFmpeg %s for %s (FrameReader.Native)",\n' "$VERSION" "$rid"
-  printf '  "documentNamespace": "https://github.com/bisforboman/shotdetector/spdx/ffmpeg-%s-%s-%s",\n' "$VERSION" "$rid" "$(date -u +%Y%m%dT%H%M%SZ)"
+  printf '  "documentNamespace": "https://github.com/bisforboman/FrameReader/spdx/ffmpeg-%s-%s-%s",\n' "$VERSION" "$rid" "$(date -u +%Y%m%dT%H%M%SZ)"
   printf '  "creationInfo": {"created": "%s", "creators": ["Tool: tools/native/build-ffmpeg.sh"]},\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   printf '  "documentDescribes": ["SPDXRef-ffmpeg"],\n  "packages": [\n'
   pkg ffmpeg FFmpeg "$VERSION" LGPL-2.1-or-later "https://ffmpeg.org/releases/ffmpeg-$VERSION.tar.xz" "$SHA256" ffmpeg:ffmpeg; printf ',\n'
