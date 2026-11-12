@@ -131,10 +131,13 @@ while (frames.TryRead(out var frame))
 `ReadAhead = 4` overlaps that loop's encoding and writing with decoding, as ffmpeg's threaded pipeline does: a thread of
 the reader's own decodes up to 4 frames ahead (deinterlacing and rotating them too) while the loop works on the frame it
 has, for any per-frame work between reads (encoding, analysis, uploads) and with `TryRead`, `TryReadForwardTo`,
-`FrameRate` and seeks alike. The read still converts the frame it gives, so the frame is valid until the next read as
-without, and the frames, their tags and any error are the same, in the same order. It pays where decoding leaves cores
-free; where it keeps every core busy there's nothing to overlap with (1 or 2 hand over nearly every frame on its own and
-can cost a little more than they save). Each frame ahead holds a decoded frame's memory (about 3 MB at 1080p).
+`FrameRate` and seeks alike. While `TryRead` reads frame after frame without `FrameRate`, that thread converts the
+frames too (its own swscale context, the same settings, so the same bytes), so the loop's thread only hands them over;
+the other reads (and `FrameRate`'s, as here) convert the frame they give in the read. Either way the frame is valid
+until the next read as without, and the frames, their tags and any error are the same, in the same order. It pays where
+decoding leaves cores free; where it keeps every core busy there's nothing to overlap with (1 or 2 hand over nearly
+every frame on its own and can cost a little more than they save). Each frame ahead holds a decoded frame's memory
+(about 3 MB at 1080p), and with `TryRead` its converted copy as well.
 
 Without `JpegQscale`, JPEG uses ffmpeg's default, its rate control, which carries its state from frame to frame in one
 ffmpeg run: `ImageEncoder` starts it afresh for every image, so each file is what a one-frame run

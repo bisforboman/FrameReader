@@ -62,9 +62,12 @@ public sealed record VideoFrameReaderOptions
     /// Frames to decode ahead on a background thread while the caller works on the frame it has (encodes it, analyses
     /// it, uploads it): decoding (with deinterlacing and rotation) goes on between reads, with up to this many decoded
     /// frames waiting, each a decoded frame's memory (about 3 MB at 1080p 8-bit 4:2:0). The frames, their tags and the
-    /// errors are those 0 gives, in the same order. The conversion to <see cref="FrameFormat"/> stays in the read (the
-    /// frame <see cref="VideoFrameReader.TryReadForwardTo"/> gives isn't known before it is asked for), so a frame is
-    /// valid until the next read as without. A Stream input is read on that thread; with row-wise deinterlacing every
+    /// errors are those 0 gives, in the same order. While <see cref="VideoFrameReader.TryRead"/> reads frame after frame
+    /// (without <see cref="FrameRate"/>), that thread also converts them to <see cref="FrameFormat"/> (its own swscale
+    /// context with the same settings, so the same bytes), each frame ahead then holding a converted frame's memory too;
+    /// the other reads convert in the read (the frame <see cref="VideoFrameReader.TryReadForwardTo"/> gives isn't known
+    /// before it is asked for). Either way a frame is valid until the next read, as without. A Stream input is read on
+    /// that thread; with row-wise deinterlacing every
     /// frame is deinterlaced, also those <see cref="VideoFrameReader.TryReadForwardTo"/> passes over. It pays with spare
     /// cores (decoding doesn't keep them all busy): 4 hides the work between reads as far as decoding allows; 1 or 2 hand
     /// over nearly every frame on its own, which can cost more than it saves where every core decodes. Dispose waits for
@@ -163,9 +166,9 @@ public sealed unsafe class VideoFrameReader : IDisposable
     readonly VideoFrameReaderOptions _options;
     readonly AVPixelFormat _format;
     readonly ReadAhead? _ahead; // ReadAhead: the decoding thread and its frames; null: decoding in the read
-    SwsContext* _sws;
-    AVFrame* _in, _out;
-    byte[] _packed = [];
+    readonly FrameConverter _converter;
+    FrameOutput? _output; // the caller's thread converts into this (made at the first conversion)
+    bool _convertAhead; // the decoding thread converts too: plain reads, frame after frame (TryRead)
     int _index = -1;
     long? _keepFrom; // after a seek: frames whose pts plus this is below 0 are dropped (ffmpeg's trim)
     TimeSpan? _lastTarget; // the time read forward to last (since the last seek), and the step to it: the next one's guess
@@ -219,8 +222,9 @@ public sealed unsafe class VideoFrameReader : IDisposable
         _decoder = open(_options.Decoder);
         if (_options.FrameRate is null && !_options.DecodeEveryPacket)
             _decoder.SkipUnreferenced();
+        _converter = new FrameConverter(_options, _format);
         if (_options.ReadAhead > 0)
-            _ahead = new ReadAhead(_decoder, _options.ReadAhead);
+            _ahead = new ReadAhead(_decoder, _options.ReadAhead, () => new FrameConverter(_options, _format));
     }
 
     /// <summary>FFmpeg's pixel format for a <see cref="FrameFormat"/>; NONE for an unknown one.</summary>
@@ -249,6 +253,7 @@ public sealed unsafe class VideoFrameReader : IDisposable
     public void Seek(TimeSpan time)
     {
         NoFrameRate(nameof(Seek));
+        ConvertAhead(false);
         _index = -1;
         (_lastTarget, _guessed) = (null, false); // no steps to guess the next time by
         if (_decoder.TimestampsUnreliable)
@@ -358,6 +363,9 @@ public sealed unsafe class VideoFrameReader : IDisposable
     {
         if (_options.FrameRate is { } rate)
             return TryReadFps(rate, out frame);
+
+        // Frame after frame: the decoding thread can convert the frames it reads ahead too, as they'll all be read.
+        ConvertAhead(true);
         if (!Advance())
         {
             frame = default;
@@ -366,6 +374,18 @@ public sealed unsafe class VideoFrameReader : IDisposable
 
         Convert(out frame);
         return true;
+    }
+
+    /// <summary>
+    /// Whether the decoding thread converts the frames it reads ahead: on for <see cref="TryRead"/>, off for the reads that
+    /// pass frames over or don't convert (a frame it converted all the same is given converted, or let go).
+    /// </summary>
+    void ConvertAhead(bool on)
+    {
+        if (_ahead is null || _convertAhead == on)
+            return;
+        _convertAhead = on;
+        _ahead.ConvertAhead(on);
     }
 
     /// <summary>
@@ -386,6 +406,7 @@ public sealed unsafe class VideoFrameReader : IDisposable
     /// <exception cref="FrameReaderException">Decoding or the fps filter failed.</exception>
     public bool TryTake([NotNullWhen(true)] out DecodedFrame? frame)
     {
+        ConvertAhead(false);
         if (_options.FrameRate is { } rate)
             frame = NextFps() ? TakeFps(rate) : null;
         else
@@ -515,6 +536,7 @@ public sealed unsafe class VideoFrameReader : IDisposable
     /// </summary>
     bool AdvanceTo(TimeSpan time, TimeSpan? next = null)
     {
+        ConvertAhead(false); // it passes frames over
         long keep = _decoder.TrimOffset(time);
 
         // Frames before the one wanted that nothing references needn't decode, nor those after it before the next time
@@ -697,6 +719,9 @@ public sealed unsafe class VideoFrameReader : IDisposable
     /// <summary>How many times reading ahead paused to look at the index (tests).</summary>
     internal int ReadAheadPauses => _ahead?.Pauses ?? 0;
 
+    /// <summary>Frames the decoding thread converted that reads gave (tests).</summary>
+    internal int ConvertedAhead => _ahead?.Converted ?? 0;
+
     /// <summary>Stops the decoding thread, if any, until the next read, so the decoder can be asked (its index); true.</summary>
     bool Pause()
     {
@@ -811,137 +836,29 @@ public sealed unsafe class VideoFrameReader : IDisposable
     void Convert(out VideoFrame frame)
     {
         long pts = Pts;
-        Convert(Frame(), pts, TimeSpan.FromSeconds((pts + StartOffset) * _decoder.TimeBase.Value), out frame);
+        var time = TimeSpan.FromSeconds((pts + StartOffset) * _decoder.TimeBase.Value);
+        if (_ahead?.Current.Converted is { } converted)
+        {
+            frame = new VideoFrame(_index, pts, time, converted.Width, converted.Height, _options.FrameFormat, converted.Data, converted.Tags);
+            return;
+        }
+
+        Convert(Frame(), pts, time, out frame);
     }
 
     void Convert(AVFrame* src, long pts, TimeSpan time, out VideoFrame frame)
     {
-        var (width, height) = OutputSize(src->width, src->height);
-        if (_out == null)
-        {
-            _out = ffmpeg.av_frame_alloc();
-            _in = ffmpeg.av_frame_alloc();
-            _sws = ffmpeg.sws_alloc_context();
-            Check(ffmpeg.av_opt_set(_sws, "sws_flags", "bicubic", 0), "scaler");
-        }
-
-        if (_out->width != width || _out->height != height)
-        {
-            ffmpeg.av_frame_unref(_out);
-            (_out->format, _out->width, _out->height) = ((int)_format, width, height);
-
-            // As the scale filter's output buffers are (issue #656): aligned rows, where swscale takes other code paths into
-            // an unaligned buffer (packed rows) that left an odd width's last RGB column unwritten on x64; and zeroed, as
-            // libavfilter's frame pool allocates them (av_buffer_allocz), since on ARM swscale never writes that column, so
-            // ffmpeg's bytes there are 0 (ours were the buffer's old contents). Packed after converting, as rawvideo writes them.
-            Check(ffmpeg.av_frame_get_buffer(_out, 0), "frame buffer");
-            for (uint i = 0; i < 8 && _out->buf[i] != null; i++)
-                NativeMemory.Clear(_out->buf[i]->data, (nuint)_out->buf[i]->size);
-        }
-
-        // As the scale filter does: the input read as progressive (its interl=0), and the output's tags those the link
-        // negotiates (YUV and gray keep the input's matrix and range; RGB is RGB).
-        // Its in_chroma_loc (default unspecified) replaces the frame's chroma location, so chroma isn't re-sited.
-        Check(ffmpeg.av_frame_ref(_in, src), "frame");
-        _in->flags &= ~ffmpeg.AV_FRAME_FLAG_INTERLACED;
-        _in->chroma_location = AVChromaLocation.AVCHROMA_LOC_UNSPECIFIED;
-        (_out->chroma_location, _out->color_primaries, _out->color_trc) = (_in->chroma_location, _in->color_primaries, _in->color_trc);
-        bool rgb = _options.FrameFormat is not (FrameFormat.Gray8 or FrameFormat.Yuv420p);
-        _out->colorspace = rgb ? AVColorSpace.AVCOL_SPC_RGB : src->colorspace;
-        _out->color_range = rgb ? AVColorRange.AVCOL_RANGE_JPEG : src->color_range;
-
-        // The decoded frame already in the output's format and size: the scale filter passes it through untouched, where
-        // swscale's unscaled copy leaves the last chroma row of an odd height unwritten (issue #656).
-        bool passThrough = src->format == (int)_format && (src->width, src->height) == (width, height);
-        if (!passThrough)
-        {
-            int ret = ffmpeg.sws_scale_frame(_sws, _out, _in);
-            ffmpeg.av_frame_unref(_in);
-            Check(ret, "convert");
-        }
-
-        var converted = passThrough ? _in : _out;
-        int size = ffmpeg.av_image_get_buffer_size(_format, width, height, 1);
-        ReadOnlySpan<byte> data;
-        if (!passThrough && _out->linesize[0] == size / height && _options.FrameFormat != FrameFormat.Yuv420p)
-        {
-            data = new ReadOnlySpan<byte>(_out->data[0], size); // one plane, its rows already packed
-        }
-        else
-        {
-            // The rows and planes packed one after another, as rawvideo writes them.
-            if (_packed.Length != size)
-                _packed = new byte[size];
-            var planes = default(byte_ptrArray4);
-            var strides = default(int_array4);
-            for (uint i = 0; i < 4; i++)
-            {
-                planes[i] = converted->data[i];
-                strides[i] = converted->linesize[i];
-            }
-
-            fixed (byte* p = _packed)
-                Check(ffmpeg.av_image_copy_to_buffer(p, size, in planes, in strides, _format, width, height, 1), "pack");
-            data = _packed;
-        }
-
-        if (passThrough)
-            ffmpeg.av_frame_unref(_in);
-
-        // The aspect ratio as the scale filter sets its output's: the input's times the change in shape (0/1 stays).
-        var sar = src->sample_aspect_ratio;
-        sar = sar.num != 0
-            ? ffmpeg.av_mul_q(new AVRational { num = height * src->width, den = width * src->height }, sar)
-            : new AVRational { num = 0, den = 1 };
-
-        // Gray as ffmpeg's link negotiates it: full range, no matrix, although swscale copies the luma unchanged.
-        var tags = _options.FrameFormat == FrameFormat.Gray8
-            ? new FrameTags(sar, AVColorRange.AVCOL_RANGE_JPEG, AVColorSpace.AVCOL_SPC_UNSPECIFIED, _out->color_primaries, _out->color_trc)
-            : new FrameTags(sar, _out->color_range, _out->colorspace, _out->color_primaries, _out->color_trc);
-        frame = new VideoFrame(_index, pts, time, width, height, _options.FrameFormat, data, tags);
+        var output = _output ??= new FrameOutput();
+        _converter.Convert(src, output);
+        frame = new VideoFrame(_index, pts, time, output.Width, output.Height, _options.FrameFormat, output.Data, output.Tags);
     }
 
-    /// <summary>The size frames come out at: Width and Height, or MaxWidth's cap, or the frame's own.</summary>
-    (int Width, int Height) OutputSize(int width, int height)
-    {
-        if (_options.Width is { } w && _options.Height is { } h)
-            return (w, h);
-        if (_options.MaxWidth is not { } max)
-            return (width, height);
-
-        // scale's -2: av_rescale(w, ih, iw * 2) * 2, the division rounded to nearest (halves away from zero), so an
-        // odd height becomes even even when the width stays. A height that comes out 0 (a frame over twice as wide as
-        // tall per pixel of the cap) is the input's, as libavfilter fills in a link's missing size.
-        int outWidth = Math.Min(max, width);
-        long twice = 2L * width;
-        int outHeight = (int)((outWidth * (long)height + twice / 2) / twice * 2);
-        return (outWidth, outHeight == 0 ? height : outHeight);
-    }
-
-    /// <summary>Stops the decoding thread (when reading ahead), then frees the decoder, the scaler and the output buffer.</summary>
+    /// <summary>Stops the decoding thread (when reading ahead), then frees the decoder, the scalers and the output buffers.</summary>
     public void Dispose()
     {
         _ahead?.Dispose();
-        if (_sws != null)
-        {
-            var s = _sws;
-            ffmpeg.sws_free_context(&s);
-            _sws = null;
-        }
-
-        if (_in != null)
-        {
-            var f = _in;
-            ffmpeg.av_frame_free(&f);
-            _in = null;
-        }
-
-        if (_out != null)
-        {
-            var f = _out;
-            ffmpeg.av_frame_free(&f);
-            _out = null;
-        }
+        _converter.Dispose();
+        _output?.Dispose();
 
         if (_fpsFrame != null)
         {
@@ -961,7 +878,7 @@ public sealed unsafe class VideoFrameReader : IDisposable
         _decoder.Dispose();
     }
 
-    static void Check(int ret, string what)
+    internal static void Check(int ret, string what)
     {
         if (ret < 0)
             throw new FrameReaderException(FrameReaderError.DecodeFailed, $"FFmpeg ({what}): {FFmpegLibraries.ErrorMessage(ret)}");
