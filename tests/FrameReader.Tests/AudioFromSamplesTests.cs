@@ -4,7 +4,7 @@ using FrameReader;
 /// <summary>
 /// ReferenceToneFinder and WaveformBuilder (issue #494): fed the chunks an AudioReader gives, whole or split anywhere,
 /// they give exactly what ReferenceTone.Find and WaveformData.Read give for the file (those need
-/// SHOTDETECTOR_FFMPEG_LIBS, an FFmpeg 8.1 shared build's folder with ffmpeg; without it they do nothing); on
+/// FRAMEREADER_FFMPEG_LIBS, an FFmpeg 8.1 shared build's folder with ffmpeg; without it they do nothing); on
 /// generated samples, their edges and refusals (no FFmpeg).
 /// </summary>
 public class AudioFromSamplesTests
@@ -281,7 +281,7 @@ public class AudioFromSamplesTests
             : Environment.GetEnvironmentVariable("PATH")!.Split(Path.PathSeparator).Select(d => Path.Combine(d, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet")).First(File.Exists);
         var psi = new ProcessStartInfo(dotnet) { RedirectStandardOutput = true, RedirectStandardError = true };
         psi.ArgumentList.Add(check);
-        psi.Environment.Remove("SHOTDETECTOR_FFMPEG_LIBS");
+        psi.Environment.Remove("FRAMEREADER_FFMPEG_LIBS");
         psi.Environment.Remove("LD_LIBRARY_PATH");
         psi.Environment.Remove("DYLD_LIBRARY_PATH");
         psi.Environment["PATH"] = Path.GetDirectoryName(dotnet)!;

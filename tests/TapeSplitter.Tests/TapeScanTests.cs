@@ -11,7 +11,7 @@ using TapeSplitter;
 /// silencedetect's (on the samples as floats, <c>aformat=flt</c>, as <see cref="SilenceFinder"/> takes them) with
 /// <c>-copyts</c>; the flat colours (no FFmpeg filter) and the gaps, cut points and recordings are what the tape was
 /// made of. As a lossless capture (FFV1, PCM), as DV (the codec of DV tapes and their captures) and at 10 bits 4:2:2
-/// without sound. Needs SHOTDETECTOR_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg); without it these do
+/// without sound. Needs FRAMEREADER_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg); without it these do
 /// nothing.
 /// </summary>
 public partial class TapeScanTests
@@ -169,7 +169,7 @@ public partial class TapeScanTests
 
     static string? Load()
     {
-        string? dir = Environment.GetEnvironmentVariable("SHOTDETECTOR_FFMPEG_LIBS");
+        string? dir = Environment.GetEnvironmentVariable("FRAMEREADER_FFMPEG_LIBS");
         if (dir is not null)
             FFmpegLibraries.Load(dir);
         return dir;

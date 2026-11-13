@@ -3,7 +3,7 @@ using FrameReader;
 
 /// <summary>
 /// Remux.Copy against ffmpeg's command line: <c>ffmpeg -i IN -map ... -c copy -fflags +bitexact OUT</c>, byte for byte.
-/// Needs SHOTDETECTOR_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg); without it these do nothing.
+/// Needs FRAMEREADER_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg); without it these do nothing.
 /// </summary>
 public class RemuxTests
 {
@@ -232,7 +232,7 @@ public class RemuxTests
     }
 
     // CENC (issue #171): FFmpeg's mp4 muxer encrypts, byte for byte ffmpeg's -encryption_* output, for DASH segments and a
-    // plain .mp4. Widevine adds the pssh box (pssh-box.py's; CI checks against it with SHOTDETECTOR_WIDEVINE_PSSH) to each
+    // plain .mp4. Widevine adds the pssh box (pssh-box.py's; CI checks against it with FRAMEREADER_WIDEVINE_PSSH) to each
     // init segment, which is otherwise ffmpeg's, and ContentProtection to the MPD; ffmpeg decrypts it back to the input.
     [Fact]
     public void EncryptedAsFfmpegWithWidevineSignalling()
@@ -273,7 +273,7 @@ public class RemuxTests
 
             // pssh: version 0, Widevine's system ID, WidevinePsshData with the key ID (field 2)
             byte[] pssh = Convert.FromHexString("000000327073736800000000edef8ba979d64acea3c827dcd51d21ed000000121210" + KeyId);
-            if (Environment.GetEnvironmentVariable("SHOTDETECTOR_WIDEVINE_PSSH") is { Length: > 0 } fromPsshBox)
+            if (Environment.GetEnvironmentVariable("FRAMEREADER_WIDEVINE_PSSH") is { Length: > 0 } fromPsshBox)
                 Assert.Equal(Convert.FromBase64String(fromPsshBox.Trim()), pssh);
             foreach (string name in names.Where(n => n.StartsWith("init-", StringComparison.Ordinal)))
             {
@@ -317,10 +317,10 @@ public class RemuxTests
             }
 
             // Issue #185: the DRM provider's WidevinePsshData (here key ID, provider "conax", content_id "content-0001"),
-            // written unchanged: pssh-box.py --widevine-system-id --pssh-data's box (CI: SHOTDETECTOR_WIDEVINE_PSSH_FROM_DATA).
+            // written unchanged: pssh-box.py --widevine-system-id --pssh-data's box (CI: FRAMEREADER_WIDEVINE_PSSH_FROM_DATA).
             byte[] conax = Convert.FromBase64String("EhChssPU5fYHGCk6S1xtfo+QGgVjb25heCIMY29udGVudC0wMDAx");
             byte[] conaxBox = Convert.FromBase64String("AAAAR3Bzc2gAAAAA7e+LqXnWSs6jyCfc1R0h7QAAACcSEKGyw9Tl9gcYKTpLXG1+j5AaBWNvbmF4Igxjb250ZW50LTAwMDE=");
-            if (Environment.GetEnvironmentVariable("SHOTDETECTOR_WIDEVINE_PSSH_FROM_DATA") is { Length: > 0 } fromData)
+            if (Environment.GetEnvironmentVariable("FRAMEREADER_WIDEVINE_PSSH_FROM_DATA") is { Length: > 0 } fromData)
                 Assert.Equal(Convert.FromBase64String(fromData.Trim()), conaxBox);
             string given = Directory.CreateDirectory(Path.Combine(dir, "given")).FullName;
             Remux.Copy(input, Path.Combine(given, "manifest.mpd"), new RemuxOptions

@@ -5,7 +5,7 @@ using FrameReader;
 /// <summary>
 /// <see cref="VideoFrameReaderOptions.ReadAhead"/>: decoding ahead on a thread of its own gives what decoding in the read
 /// gives (frames, numbers, times, tags, the end, errors), whatever the reads, seeks and jumps; and it stops cleanly when
-/// disposed with the thread mid-frame. Needs SHOTDETECTOR_FFMPEG_LIBS; without it these do nothing.
+/// disposed with the thread mid-frame. Needs FRAMEREADER_FFMPEG_LIBS; without it these do nothing.
 /// </summary>
 public class ReadAheadTests
 {

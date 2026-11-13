@@ -3,7 +3,7 @@ using FrameReader;
 
 /// <summary>
 /// The packet scan (<see cref="ProbeOptions.PacketTimestamps"/>) of an MP4/MOV file reads its sample tables, not its media
-/// data, where that gives the same: every value MediaProbe reads equals the full read's. Needs SHOTDETECTOR_FFMPEG_LIBS
+/// data, where that gives the same: every value MediaProbe reads equals the full read's. Needs FRAMEREADER_FFMPEG_LIBS
 /// (with ffmpeg beside the libraries to make the clips); a codec whose encoder that ffmpeg lacks is left out.
 /// </summary>
 public class PacketScanTests

@@ -5,7 +5,7 @@ using FrameReader;
 /// <summary>
 /// AudioWriter against ffmpeg's command line: the same float32 samples in, the same file out, byte for byte, with
 /// bitexact on both sides (<c>ffmpeg -f f32le -ar R -ac C -i raw -c:a ENC [-b:a B] -fflags +bitexact -flags:a +bitexact OUT</c>).
-/// Needs SHOTDETECTOR_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg); without it these do nothing.
+/// Needs FRAMEREADER_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg); without it these do nothing.
 /// </summary>
 public class AudioWriterTests
 {

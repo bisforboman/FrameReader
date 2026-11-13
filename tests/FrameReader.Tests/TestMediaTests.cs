@@ -1,7 +1,7 @@
 using FrameReader;
 
 /// <summary>
-/// TestMedia (issue #237): synthetic clips from FFmpeg's sources and encoders, in-process. Needs SHOTDETECTOR_FFMPEG_LIBS;
+/// TestMedia (issue #237): synthetic clips from FFmpeg's sources and encoders, in-process. Needs FRAMEREADER_FFMPEG_LIBS;
 /// without it these do nothing.
 /// </summary>
 public class TestMediaTests

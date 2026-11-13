@@ -4,7 +4,7 @@ using System.Text.Json;
 using FrameReader;
 
 /// <summary>
-/// MediaProbe's values against ffprobe's for the same file. Needs SHOTDETECTOR_FFMPEG_LIBS (an FFmpeg 8.1 shared
+/// MediaProbe's values against ffprobe's for the same file. Needs FRAMEREADER_FFMPEG_LIBS (an FFmpeg 8.1 shared
 /// build's folder, which also has ffmpeg and ffprobe); without it these do nothing.
 /// </summary>
 public class MediaProbeTests

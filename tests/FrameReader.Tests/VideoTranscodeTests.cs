@@ -2,7 +2,7 @@ using FrameReader;
 
 /// <summary>
 /// Video.Transcode (issue #240): a whole file re-encoded in one call, deinterlaced when flagged interlaced. Needs
-/// SHOTDETECTOR_FFMPEG_LIBS; without it these do nothing.
+/// FRAMEREADER_FFMPEG_LIBS; without it these do nothing.
 /// </summary>
 public class VideoTranscodeTests
 {

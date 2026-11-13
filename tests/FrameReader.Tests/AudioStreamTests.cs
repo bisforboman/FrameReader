@@ -6,7 +6,7 @@ using FrameReader;
 /// <summary>
 /// FrameReader's audio from a headers-first Stream (read once, not seekable, as ffmpeg reads a pipe): AudioFilter,
 /// SpectralStats and WaveformData give the file's results, and AudioReader after a Seek gives ffmpeg's
-/// <c>-ss T -i -</c> on the same bytes through stdin. Needs SHOTDETECTOR_FFMPEG_LIBS (an FFmpeg 8.1 shared build's
+/// <c>-ss T -i -</c> on the same bytes through stdin. Needs FRAMEREADER_FFMPEG_LIBS (an FFmpeg 8.1 shared build's
 /// folder with ffmpeg); without it these do nothing.
 /// </summary>
 public class AudioStreamTests

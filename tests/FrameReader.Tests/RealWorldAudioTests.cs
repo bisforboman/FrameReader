@@ -6,13 +6,13 @@ using FrameReader;
 /// <summary>
 /// AudioReader and SpectralStats on a real film's own audio (AAC, MP3, Opus; realworld.yml runs it per file) against ffmpeg's
 /// command line, like <see cref="AudioReaderTests"/> and <see cref="SpectralStatsTests"/> do on synthetic clips: real
-/// encoders' streams (priming, padding, long durations, seeking in the middle). Needs SHOTDETECTOR_REALWORLD_AUDIO (the
-/// film) and SHOTDETECTOR_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg); without them these do nothing.
+/// encoders' streams (priming, padding, long durations, seeking in the middle). Needs FRAMEREADER_REALWORLD_AUDIO (the
+/// film) and FRAMEREADER_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg); without them these do nothing.
 /// </summary>
 public class RealWorldAudioTests
 {
     static readonly string? Libs = TestLibraries.Load();
-    static readonly string? Film = Environment.GetEnvironmentVariable("SHOTDETECTOR_REALWORLD_AUDIO");
+    static readonly string? Film = Environment.GetEnvironmentVariable("FRAMEREADER_REALWORLD_AUDIO");
 
     static Process Ffmpeg(params string[] args)
     {

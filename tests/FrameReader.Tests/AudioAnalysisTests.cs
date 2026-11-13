@@ -6,7 +6,7 @@ using FrameReader;
 /// same options, to the bit (tone segments, the waveform's points and .dat bytes, loudness's doubles, silences, the
 /// callback's chunks), alone and all together, on integer, float and lossy audio, 5.1, Matroska's millisecond
 /// timestamps, a second stream, a resampling and downmixing reader, after a seek and with a tone search shorter than
-/// the clip; and all of them read the input once. Needs SHOTDETECTOR_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder
+/// the clip; and all of them read the input once. Needs FRAMEREADER_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder
 /// with ffmpeg); without it these do nothing.
 /// </summary>
 public class AudioAnalysisTests

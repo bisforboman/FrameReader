@@ -112,7 +112,7 @@ jobs:
         if: needs.changes.outputs.docs_only != 'true'
         run: |
           cp "${{ steps.ffmpeg.outputs.bin }}/ffmpeg" "${{ steps.ffmpeg.outputs.bin }}/ffprobe" native/linux-x64/
-          echo "SHOTDETECTOR_FFMPEG_LIBS=$PWD/native/linux-x64" >> "$GITHUB_ENV"
+          echo "FRAMEREADER_FFMPEG_LIBS=$PWD/native/linux-x64" >> "$GITHUB_ENV"
 
       # BBC's audiowaveform, the reference for WaveformData (its test is skipped without it). Ubuntu doesn't package
       # it; its maintainer's PPA, as its README says, has a build for each Ubuntu release.
@@ -138,11 +138,11 @@ jobs:
           script=$(find pssh-box -name pssh-box.py | head -1)
           pssh=$(python3 "$script" --widevine-system-id --key-id a1b2c3d4e5f60718293a4b5c6d7e8f90 --base64)
           echo "pssh-box.py: $pssh"
-          echo "SHOTDETECTOR_WIDEVINE_PSSH=$pssh" >> "$GITHUB_ENV"
+          echo "FRAMEREADER_WIDEVINE_PSSH=$pssh" >> "$GITHUB_ENV"
           # A DRM provider's own WidevinePsshData: key ID, provider "conax", content_id "content-0001".
           from_data=$(python3 "$script" --widevine-system-id --pssh-data EhChssPU5fYHGCk6S1xtfo+QGgVjb25heCIMY29udGVudC0wMDAx --base64)
           echo "pssh-box.py --pssh-data: $from_data"
-          echo "SHOTDETECTOR_WIDEVINE_PSSH_FROM_DATA=$from_data" >> "$GITHUB_ENV"
+          echo "FRAMEREADER_WIDEVINE_PSSH_FROM_DATA=$from_data" >> "$GITHUB_ENV"
 
       - name: Test
         if: needs.changes.outputs.docs_only != 'true'
@@ -162,9 +162,9 @@ jobs:
       - name: Test VideoWriter with x264
         if: needs.changes.outputs.docs_only != 'true'
         env:
-          SHOTDETECTOR_FFMPEG_LIBS: ${{ steps.gpl.outputs.bin }}
-          SHOTDETECTOR_REQUIRE_X264: '1'
-          SHOTDETECTOR_KEEP_DIFFERING: ${{ runner.temp }}/differing
+          FRAMEREADER_FFMPEG_LIBS: ${{ steps.gpl.outputs.bin }}
+          FRAMEREADER_REQUIRE_X264: '1'
+          FRAMEREADER_KEEP_DIFFERING: ${{ runner.temp }}/differing
           # x264's AVX-512 code and .NET's tiered JIT in one process differ from ffmpeg about 1 run in 250 on AVX-512
           # runners; either alone is exact (0 in 3,200 and 0 in 2,000 runs; src/FrameReader/README.md).
           DOTNET_TieredCompilation: '0'
@@ -185,8 +185,8 @@ jobs:
       - name: Test ImageEncoder against its own build's ffmpeg
         if: needs.changes.outputs.docs_only != 'true'
         env:
-          SHOTDETECTOR_FFMPEG_LIBS: ${{ steps.gpl.outputs.bin }}
-          SHOTDETECTOR_REQUIRE_SAME_BUILD: '1'
+          FRAMEREADER_FFMPEG_LIBS: ${{ steps.gpl.outputs.bin }}
+          FRAMEREADER_REQUIRE_SAME_BUILD: '1'
         run: dotnet test tests/FrameReader.Tests --no-build --filter "FullyQualifiedName~ImageEncoder" --logger GitHubActions
 
       - name: The benchmarks build
@@ -259,7 +259,7 @@ jobs:
       - name: Its executables beside our libraries
         run: |
           cp "${{ steps.ffmpeg.outputs.bin }}/ffmpeg" "${{ steps.ffmpeg.outputs.bin }}/ffprobe" native/linux-arm64/
-          echo "SHOTDETECTOR_FFMPEG_LIBS=$PWD/native/linux-arm64" >> "$GITHUB_ENV"
+          echo "FRAMEREADER_FFMPEG_LIBS=$PWD/native/linux-arm64" >> "$GITHUB_ENV"
 
       - name: Test
         run: dotnet test FrameReader.slnx --logger GitHubActions
@@ -296,7 +296,7 @@ jobs:
       - name: Its executables beside our libraries
         run: |
           cp /usr/bin/ffmpeg /usr/bin/ffprobe native/linux-musl-x64/
-          echo "SHOTDETECTOR_FFMPEG_LIBS=$PWD/native/linux-musl-x64" >> "$GITHUB_ENV"
+          echo "FRAMEREADER_FFMPEG_LIBS=$PWD/native/linux-musl-x64" >> "$GITHUB_ENV"
 
       - name: Test
         run: dotnet test FrameReader.slnx --logger GitHubActions

@@ -7,7 +7,7 @@ using FrameReader;
 /// A Stream that can seek (a FileStream, a MemoryStream, one positioned after other bytes) is read as ffmpeg reads the
 /// file: an MP4 with its moov last (ffmpeg's default, and most cameras') opens, and its probe, frames, seeks and audio
 /// are the file path's; a stream that can't seek still can't open it, as ffmpeg can't on a pipe. Needs
-/// SHOTDETECTOR_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg); without it these do nothing.
+/// FRAMEREADER_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg); without it these do nothing.
 /// </summary>
 public class SeekableStreamTests
 {
