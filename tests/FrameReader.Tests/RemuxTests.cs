@@ -84,6 +84,79 @@ public class RemuxTests
         }
     }
 
+    // Start and End: ffmpeg's input -ss and -to with stream copy (the backlog's trimming, issue #23's tape splitter):
+    // keyframe-aligned where there are B-frames and GOPs (H.264, MPEG-2), exact where every frame is a keyframe (DV,
+    // FFV1 with -g 1 and PCM), the MPEG-TS input's start time not 0. -1: not set.
+    [Theory]
+    [InlineData("in.mp4", "-c:v libx264 -g 12 -bf 2 -c:a aac", "cut.mp4", 1300, 2600)]
+    [InlineData("in.mp4", "-c:v libx264 -g 12 -bf 2 -c:a aac", "cut.mkv", 1300, -1)]
+    [InlineData("in.mp4", "-c:v libx264 -g 12 -bf 2 -c:a aac", "head.mp4", -1, 2000)]
+    [InlineData("in.avi", "-c:v dvvideo -s 720x576 -pix_fmt yuv420p -c:a pcm_s16le -ar 48000", "cut.avi", 520, 2200)]
+    [InlineData("in.mkv", "-c:v ffv1 -g 1 -c:a pcm_s16le", "cut.mkv", 1040, 2000)]
+    [InlineData("in.ts", "-c:v mpeg2video -g 12 -bf 2 -c:a mp2", "cut.ts", 700, 2300)]
+    [InlineData("in.ts", "-c:v mpeg2video -g 12 -bf 2 -c:a mp2", "cut.mp4", 700, 2300)]
+    public void TrimIsFfmpegs(string source, string make, string output, int startMs, int endMs)
+    {
+        if (Libs is null)
+            return;
+        string dir = Directory.CreateTempSubdirectory("framereader-remux-").FullName;
+        try
+        {
+            string input = Path.Combine(dir, source), expected = Path.Combine(dir, "expected-" + output), actual = Path.Combine(dir, output);
+            Ffmpeg(["-v", "error", "-y", .. Make.Split(' '), "-map", "0", "-map", "1", .. make.Split(' '), input]);
+            string[] cut = [.. startMs >= 0 ? new[] { "-ss", Seconds(startMs) } : [], .. endMs >= 0 ? new[] { "-to", Seconds(endMs) } : []];
+            Ffmpeg(["-v", "error", "-y", .. cut, "-i", input, "-map", "0", "-c", "copy", "-fflags", "+bitexact", expected]);
+            Remux.Copy(input, actual, new RemuxOptions
+            {
+                Start = startMs >= 0 ? TimeSpan.FromMilliseconds(startMs) : null,
+                End = endMs >= 0 ? TimeSpan.FromMilliseconds(endMs) : null,
+                Bitexact = true,
+            });
+            byte[] want = File.ReadAllBytes(expected), got = File.ReadAllBytes(actual);
+            int first = 0;
+            while (first < Math.Min(want.Length, got.Length) && want[first] == got[first])
+                first++;
+            Assert.True(want.AsSpan().SequenceEqual(got), $"{source} -> {output}: ffmpeg {want.Length} bytes, ours {got.Length}, first difference at {first}");
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+
+        static string Seconds(int ms) => (ms / 1000.0).ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    // Chapters move with Start as ffmpeg moves them: those that end before it are left out, the one it falls in starts at 0.
+    [Fact]
+    public void TrimmedChaptersAreFfmpegs()
+    {
+        if (Libs is null)
+            return;
+        string dir = Directory.CreateTempSubdirectory("framereader-remux-").FullName;
+        try
+        {
+            string meta = Path.Combine(dir, "meta.txt"), input = Path.Combine(dir, "in.mkv"), expected = Path.Combine(dir, "expected.mkv"), actual = Path.Combine(dir, "out.mkv");
+            File.WriteAllText(meta, ";FFMETADATA1\n[CHAPTER]\nTIMEBASE=1/1000\nSTART=0\nEND=1000\ntitle=One\n[CHAPTER]\nTIMEBASE=1/1000\nSTART=1000\nEND=2000\ntitle=Two\n[CHAPTER]\nTIMEBASE=1/1000\nSTART=2000\nEND=3000\ntitle=Three\n");
+            Ffmpeg(["-v", "error", "-y", .. Make.Split(' '), "-i", meta, "-map", "0", "-map", "1", "-map_chapters", "3", "-c:v", "ffv1", "-c:a", "pcm_s16le", input]);
+            Ffmpeg("-v", "error", "-y", "-ss", "1.2", "-to", "2.5", "-i", input, "-map", "0", "-c", "copy", "-fflags", "+bitexact", expected);
+            Remux.Copy(input, actual, new RemuxOptions { Start = TimeSpan.FromMilliseconds(1200), End = TimeSpan.FromMilliseconds(2500), Bitexact = true });
+            Assert.Equal(File.ReadAllBytes(expected), File.ReadAllBytes(actual));
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
+    public void TrimNeedsEndAfterStart()
+    {
+        var never = Path.Combine(Path.GetTempPath(), "framereader-no-such-input.mkv");
+        Assert.Throws<ArgumentException>(() => Remux.Copy(never, "out.mkv", new RemuxOptions { Start = TimeSpan.FromSeconds(-1) }));
+        Assert.Throws<ArgumentException>(() => Remux.Copy(never, "out.mkv", new RemuxOptions { Start = TimeSpan.FromSeconds(2), End = TimeSpan.FromSeconds(2) }));
+        Assert.Throws<ArgumentException>(() => Remux.Copy(never, "out.mkv", new RemuxOptions { End = TimeSpan.Zero }));
+    }
+
     // DisplayRotation: ffmpeg's -display_rotation, with the input's own rotation replaced.
     [Theory]
     [InlineData(90)]

@@ -11,7 +11,7 @@ format allows, and the tests compare them with it.
 | [A thumbnail at a time](#a-thumbnail-at-a-time) | `FFMpeg.Snapshot` | `VideoFrameReader.TryTakeAt` and `ImageEncoder` |
 | [Frames into memory](#frames-into-memory) | `RawVideoPipeSink`, `StreamPipeSink` | `VideoFrameReader.TryRead` |
 | [Stream copy](#stream-copy-and-trimming) | `FFMpegArguments ... CopyChannel()` | `Remux.Copy` |
-| [Trim without re-encoding](#stream-copy-and-trimming) | `FFMpeg.SubVideo` | not yet |
+| [Trim without re-encoding](#stream-copy-and-trimming) | `FFMpeg.SubVideo` | `Remux.Copy` with `Start` and `End` |
 | [Input from a Stream](#input-from-a-stream) | `StreamPipeSource` | a `Stream` overload on each reader and on `MediaProbe.Probe` |
 
 Timings for every row, on the same files on the same machines (GitHub's x64 and ARM runners, BenchmarkDotNet):
@@ -143,14 +143,16 @@ Remux.Copy("film.mkv", "film.mp4");
 Remux.Copy("film.mkv", "sound.m4a", new() { Streams = StreamSelection.Audio });                // -map 0:a
 Remux.Copy("film.mkv", "web.mp4", new() { MuxerOptions = new Dictionary<string, string> { ["movflags"] = "+faststart" } });
 Remux.Copy("phone.mp4", "upright.mp4", new() { DisplayRotation = 90 });                         // -display_rotation 90
+Remux.Copy("film.mkv", "clip.mkv", new() { Start = TimeSpan.FromSeconds(30), End = TimeSpan.FromSeconds(45) }); // -ss 30 -to 45
 ```
 
 `Remux.CanCopy(input, output)` says beforehand whether the streams fit the container, and why not, from the muxer
 itself. `CopyAsync` and `Progress` are there for long files, and an `.mpd` output writes MPEG-DASH.
 
-Trimming without re-encoding (`FFMpeg.SubVideo`, `-ss S -to E -c copy`) isn't in FrameReader yet; keep FFMpegCore for
-it, or for anything else that is an ffmpeg command line: filters on video, concatenating, burning in subtitles,
-encoding with any encoder.
+`Start` and `End` trim without re-encoding, as `FFMpeg.SubVideo` does: the file `ffmpeg -ss S -to E -i IN -c copy OUT`
+writes, so the cut starts at the keyframe at or before `Start` (exact only where every frame is one). Keep FFMpegCore
+for anything else that is an ffmpeg command line: filters on video, concatenating, burning in subtitles, encoding with
+any encoder.
 
 ## Input from a Stream
 

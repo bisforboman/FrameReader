@@ -11,10 +11,6 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
 
 ## Next
 
-- The tape splitter example's first slice: examples/TapeSplitter reports a digitised tape's blank stretches (black, a blue "no signal" screen, a frozen picture, silence) and proposed cut points as JSON, with tests against blackdetect, freezedetect and silencedetect on tapes made with lavfi (issue #23)
-  - Why: people and digitisation services capture a whole VHS, DV or DVD tape as one file, its ends and the gaps between recordings blank; FrameReader's detectors find all of these in one decode. A report only: it writes nothing (docs/decisions/2026-11-09-tape-splitter-example.md)
-  - Status: In progress
-
 - The ShotDetector parity check on pull requests: pack the PR's FrameReader to a local feed, build ShotDetector's main against it, run its tests and its scenedetect comparison
   - Why: since the move a FrameReader change reaches ShotDetector's comparison only once released; this catches a change that moves ShotDetector's results before it merges (ShotDetector's docs/framereader-split.md, step 4). Needs ShotDetector to take FrameReader as a package with an overridable version (its step 6) first
   - Status: Open
@@ -41,10 +37,6 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
 
 - Wider output formats: `Gray16`, `Rgb48` and planar 32-bit float RGB (ffmpeg's `format=gray16le`, `rgb48le`, `gbrpf32le`) as `FrameFormat`s, checked byte for byte against `-f rawvideo`
   - Why: every `FrameFormat` is 8-bit, so a 10-bit ProRes or HDR source loses its low bits before the caller sees it, and ML input (the library's design doc names it) converts each 8-bit frame to float again in managed code
-  - Status: Open
-
-- Trimming with stream copy: `Remux.Copy` with a start and an end, as ffmpeg's `-ss S -to E -i in -c copy` (keyframe-aligned start as there), checked against ffmpeg's output packet for packet
-  - Why: the one FFMpegCore job (`FFMpeg.SubVideo`) FrameReader lacks; docs/coming-from-ffmpegcore.md says "not yet" (#11). The tape splitter (issue #23) needs it to write each recording as a file of its own: exact for intra-only captures (DV, MJPEG, lossless), keyframe-aligned for MPEG-2 and H.264
   - Status: Open
 
 - A read-once Stream of a moov-last MP4: fail with `FrameReaderException` (`InvalidInput`) where ffmpeg fails, instead of giving no frames

@@ -31,6 +31,7 @@ public class MediaProbeTests
     [InlineData("h264.mp4", "-c:v libx264 -bf 3", "")] // keyframes the sample table doesn't list (recovery points)
     [InlineData("rotated.mp4", "-c:v mpeg4", "-display_rotation 90")]
     [InlineData("interlaced.mkv", "-c:v mpeg2video -flags +ilme+ildct -top 1 -c:a aac", "")]
+    [InlineData("start.ts", "-c:v mpeg2video -c:a mp2", "")] // a start time that isn't 0
     [InlineData("tagged.mkv", "-c:v ffv1 -pix_fmt yuv422p10le -colorspace bt709 -color_range pc", "")]
     public void ValuesAreFfprobes(string name, string encode, string display)
     {
@@ -52,7 +53,7 @@ public class MediaProbeTests
                 "-v",
                 "error",
                 "-show_entries",
-                "stream=index,codec_type,codec_name,width,height,pix_fmt,color_range,color_space,field_order,r_frame_rate,avg_frame_rate,time_base,start_pts,duration_ts,nb_frames:stream_side_data=rotation:format=format_name,duration",
+                "stream=index,codec_type,codec_name,width,height,pix_fmt,color_range,color_space,field_order,r_frame_rate,avg_frame_rate,time_base,start_pts,duration_ts,nb_frames:stream_side_data=rotation:format=format_name,duration,start_time",
                 "-of",
                 "json",
                 path));
@@ -88,11 +89,12 @@ public class MediaProbeTests
             var format = json.RootElement.GetProperty("format");
             Assert.Equal(format.GetProperty("format_name").GetString(), info.Container);
             Assert.Equal(format.GetProperty("duration").GetString(), (info.Duration!.Value.Ticks / 10 / 1e6).ToString("F6", CultureInfo.InvariantCulture));
+            Assert.Equal(format.GetProperty("start_time").GetString(), (info.StartTime!.Value.Ticks / 10 / 1e6).ToString("F6", CultureInfo.InvariantCulture));
             Assert.Equal(streams.Any(s => s.GetProperty("codec_type").GetString() == "audio"), info.HasAudio);
             var packets = Run("ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "packet=pts,dts,size,pos,flags", "-of", "csv=p=0", path)
                 .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             static string Text(long? value) => value?.ToString(CultureInfo.InvariantCulture) ?? "N/A";
-            Assert.Equal(packets.Select(p => p[..^2]), Enumerable.Range(0, info.PacketTimestamps!.Count).Select(i =>
+            Assert.Equal(packets.Select(p => p.Split(',') is var f ? $"{f[0]},{f[1]},{f[2]},{f[3]},{f[4][0]}" : p), Enumerable.Range(0, info.PacketTimestamps!.Count).Select(i =>
                 $"{Text(info.PacketTimestamps[i])},{Text(info.PacketDecodeTimestamps![i])},{info.PacketSizes![i].ToString(CultureInfo.InvariantCulture)},{Text(info.PacketPositions![i])},{(info.PacketKeyframes![i] ? 'K' : '_')}"));
 
             // The same bytes as a stream (mkv: headers first): the same headers, read as from a pipe.

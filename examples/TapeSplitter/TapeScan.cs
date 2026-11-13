@@ -81,6 +81,43 @@ public static class TapeScan
         return new TapeReport(duration, spans, gaps, cuts, recordings);
     }
 
+    /// <summary>
+    /// Writes each of <paramref name="report"/>'s recordings as a file of its own, by stream copy (<see cref="Remux.Copy"/>
+    /// with a start and an end: ffmpeg's <c>-ss S -to E -i IN -c copy OUT</c>): <c>recording-01</c> and on, with the
+    /// capture's extension. Exact for a capture whose every frame is a keyframe (DV, MJPEG, FFV1 with <c>-g 1</c>); from the
+    /// keyframe before the start for MPEG-2 and H.264.
+    /// </summary>
+    /// <param name="path">The capture <paramref name="report"/> is of.</param>
+    /// <param name="report">What <see cref="Run"/> found.</param>
+    /// <param name="folder">Where the files go (created).</param>
+    /// <param name="bitexact">Leave out what differs between FFmpeg versions (ffmpeg's <c>-fflags +bitexact</c>).</param>
+    /// <returns>The files, in the recordings' order.</returns>
+    /// <exception cref="FrameReaderException">The capture can't be read or the files can't be written.</exception>
+    public static IReadOnlyList<string> Write(string path, TapeReport report, string folder, bool bitexact = false)
+    {
+        Directory.CreateDirectory(folder);
+
+        // The report's times are on the stream's clock; -ss and -to count from the container's start time.
+        long from = Microseconds(MediaProbe.Probe(path).StartTime?.TotalSeconds ?? 0);
+        var files = new List<string>();
+        foreach (var r in report.Recordings)
+        {
+            string file = Path.Combine(folder, $"recording-{files.Count + 1:D2}{Path.GetExtension(path)}");
+            Remux.Copy(path, file, new RemuxOptions
+            {
+                Start = TimeSpan.FromTicks(Math.Max(0, Microseconds(r.Start) - from) * 10),
+                End = TimeSpan.FromTicks((Microseconds(r.End) - from) * 10),
+                Bitexact = bitexact,
+            });
+            files.Add(file);
+        }
+
+        return files;
+    }
+
+    /// <summary>Seconds as whole microseconds, ffmpeg's unit for <c>-ss</c> and <c>-to</c>.</summary>
+    public static long Microseconds(double seconds) => (long)Math.Round(seconds * 1e6);
+
     // The picture detectors' spans, each with where it ends for the gaps (the video's end for one that runs to it).
     static (List<(BlankSpan Span, double End)> Spans, double Duration) Picture(string path, TapeScanOptions o)
     {

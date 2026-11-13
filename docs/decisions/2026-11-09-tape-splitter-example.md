@@ -31,3 +31,6 @@ What the other tools do (checked 2026-11-09, in examples/TapeSplitter/README.md)
 and silences with ffmpeg's blackdetect and silencedetect and makes segments of them, but not a blue screen or a
 frozen picture; dvrescue's dvpackager splits DV only, by its recording timestamps and timecode. So the example shows
 the detectors together in one decode, rather than filling a gap no tool covers.
+
+Since 2026-11-13 ([2026-11-13-tape-splitter-trim.md](2026-11-13-tape-splitter-trim.md)) the example also writes each
+recording, by stream copy, with `Remux.Copy`'s new `Start` and `End`.

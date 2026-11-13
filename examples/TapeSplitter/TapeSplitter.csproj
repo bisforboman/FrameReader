@@ -2,7 +2,7 @@
 
   <!--
     A console app that reads one long capture of a tape (VHS, DV, DVD) and reports its blank stretches and where to cut
-    it, as JSON (README.md here). It writes no files. In FrameReader.slnx so CI builds, formats and tests it
+    it, as JSON, and can write each recording as a file of its own by stream copy (README.md here). In FrameReader.slnx so CI builds, formats and tests it
     (tests/TapeSplitter.Tests). In your own app, reference the packages instead of the project:
       <PackageReference Include="FrameReader" Version="..." />
       <PackageReference Include="FrameReader.Native.linux-x64" Version="..." />   (or FrameReader.Native: every platform)

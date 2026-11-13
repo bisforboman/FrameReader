@@ -104,6 +104,7 @@ public static unsafe class MediaProbe
             {
                 Container = Marshal.PtrToStringAnsi((IntPtr)fmt->iformat->name) ?? "",
                 Duration = Known(fmt->duration) is long us ? TimeSpan.FromTicks(us * 10) : null,
+                StartTime = Known(fmt->start_time) is long startUs ? TimeSpan.FromTicks(startUs * 10) : null,
                 Video = index < 0 ? null : Video(fmt->streams[index], index),
                 HasAudio = audio,
                 Streams = streams,
