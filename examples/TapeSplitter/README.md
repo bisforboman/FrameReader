@@ -10,7 +10,9 @@ FrameReader__Libraries=/path/to/ffmpeg-8-shared/lib dotnet run --project example
 ```
 
 Options: `--min-gap 2` (the shortest blank stretch, seconds), `--silence -60` (the silence level, dB), `--write
-recordings` (write each recording into that folder as `recording-01.dv` and on, the capture's extension).
+recordings` (write each recording into that folder as `recording-01.dv` and on, the capture's extension), `--as avi`
+(their container instead: FrameReader.Native's FFmpeg has no raw `dv` muxer, so write a .dv capture's recordings as
+`avi` or `mkv`, the DV frames unchanged).
 
 ```json
 {

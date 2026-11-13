@@ -77,9 +77,10 @@ public partial class TapeScanTests
     // are intra-only (every frame a keyframe: FFV1 with -g 1, as archives encode it; by default a keyframe every 12
     // frames), exactly the recording's frames: 4 s, 3.96 s (up to the frozen frame), 4 s.
     [Theory]
-    [InlineData("tape.mkv", "s=320x240:r=25", "-map 6:a -c:v ffv1 -g 1 -c:a pcm_s16le")]
-    [InlineData("tape.dv", "s=720x576:r=25", "-map 6:a -c:v dvvideo -c:a pcm_s16le")]
-    public void WritesEachRecordingAsFfmpeg(string name, string size, string encode)
+    // The DV tape's recordings go into AVI: FrameReader.Native's FFmpeg has no raw dv muxer.
+    [InlineData("tape.mkv", "s=320x240:r=25", "-map 6:a -c:v ffv1 -g 1 -c:a pcm_s16le", ".mkv")]
+    [InlineData("tape.dv", "s=720x576:r=25", "-map 6:a -c:v dvvideo -c:a pcm_s16le", ".avi")]
+    public void WritesEachRecordingAsFfmpeg(string name, string size, string encode, string extension)
     {
         if (Libs is null)
             return;
@@ -89,12 +90,12 @@ public partial class TapeScanTests
             string path = Path.Combine(dir, name);
             Ffmpeg(["-v", "error", "-y", .. string.Format(CultureInfo.InvariantCulture, Tape, size, "yuv420p").Split(' '), .. encode.Split(' '), path]);
             var report = TapeScan.Run(path);
-            var files = TapeScan.Write(path, report, Path.Combine(dir, "recordings"), bitexact: true);
+            var files = TapeScan.Write(path, report, Path.Combine(dir, "recordings"), extension, bitexact: true);
             Assert.Equal(report.Recordings.Count, files.Count);
             for (int i = 0; i < files.Count; i++)
             {
                 var r = report.Recordings[i];
-                string expected = Path.Combine(dir, $"expected-{i}{Path.GetExtension(name)}");
+                string expected = Path.Combine(dir, $"expected-{i}{extension}");
                 Ffmpeg("-v", "error", "-y", "-ss", Text(r.Start), "-to", Text(r.End), "-i", path, "-c", "copy", "-fflags", "+bitexact", expected);
                 Assert.True(File.ReadAllBytes(expected).AsSpan().SequenceEqual(File.ReadAllBytes(files[i])), $"recording {i + 1} ({r}) isn't ffmpeg's");
                 string frames = Run("ffprobe", "-v", "error", "-select_streams", "v:0", "-count_packets", "-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", files[i]).Trim();

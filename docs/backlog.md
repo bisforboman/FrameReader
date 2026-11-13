@@ -63,6 +63,10 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
 
 ## Maybe
 
+- The raw `dv` muxer in the native build, so `Remux.Copy` writes .dv files with FrameReader.Native
+  - Why: the build enables only the muxers FrameReader uses (tools/native/build-ffmpeg.sh), and `dv` isn't one, so the tape splitter writes a .dv capture's recordings as AVI or Matroska (`--as`; found by PR #26's arm job). An edit to the script rebuilds every platform's FFmpeg, so it waits for a change that needs a rebuild anyway
+  - Status: Maybe
+
 - The tape splitter: a measure for analogue noise ("snow"), so a tape's unrecorded stretches count as gaps
   - Why: a VHS tape's unrecorded stretches show noise, not black or blue, and none of the detectors finds it (issue #23). No FFmpeg filter names it, so it would be FrameReader's own figure, outside the promise that every figure is checked against ffmpeg: the owner decides whether to make one (docs/decisions/2026-11-09-tape-splitter-example.md)
   - Status: Maybe
