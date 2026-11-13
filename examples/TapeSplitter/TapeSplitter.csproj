@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    A console app that reads one long capture of a tape (VHS, DV, DVD) and reports its blank stretches and where to cut
+    it, as JSON (README.md here). It writes no files. In FrameReader.slnx so CI builds, formats and tests it
+    (tests/TapeSplitter.Tests). In your own app, reference the packages instead of the project:
+      <PackageReference Include="FrameReader" Version="..." />
+      <PackageReference Include="FrameReader.Native.linux-x64" Version="..." />   (or FrameReader.Native: every platform)
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\FrameReader\FrameReader.csproj" />
+  </ItemGroup>
+
+</Project>

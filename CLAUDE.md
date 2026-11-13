@@ -88,7 +88,9 @@ released, and a breaking change is a major version.
 - `src/FrameReader`: the library. `src/FrameReader.Native`: the native packages (`dotnet pack -p:Rid=<rid>` from
   `native/<rid>/`).
 - `tests/FrameReader.Tests`: xunit. `tests/AudioWithoutFfmpeg`: a process of its own that fails if the audio measures
-  on samples load anything of FFmpeg.
+  on samples load anything of FFmpeg. `tests/TapeSplitter.Tests`: examples/TapeSplitter against ffmpeg's filters.
+- `examples/`: `ThumbnailApi` (ASP.NET Core) and `TapeSplitter` (console), on FrameReader's source; in the solution, so CI
+  builds, formats and tests them.
 - `benchmarks/FrameReader.Benchmarks`: against FFMpegCore and the ffmpeg executable (frame-reader-bench.yml).
 - `tools/`: `native/build-ffmpeg.sh`, `changelog.py`, `media.py` (pinned real-world media), `nightly-issue.sh`,
   `vulnerable-packages.py`, `true_peak_reference.py` (LoudnessMeterTests' reference true peaks).
