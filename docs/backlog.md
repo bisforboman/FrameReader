@@ -31,10 +31,6 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
   - Why: names from ShotDetector's repository; kept for the move so nothing else changed. Rename in the tests, the workflows, the session-start hook and CLAUDE.md in one PR
   - Status: Open
 
-- At the next change to tools/native/build-ffmpeg.sh: its SBOM's documentNamespace to this repository's URL
-  - Why: it still names github.com/bisforboman/shotdetector; any edit to the script rebuilds every platform's FFmpeg (the cache key), so it waits for a change that needs a rebuild anyway
-  - Status: Open
-
 - The approximate speed options in the README: `CodecOptions` `skip_loop_filter` = `all` (ffmpeg's `-skip_loop_filter all` before `-i`) next to `FrameDecoderOptions`' keyframes only, with a test that the frames equal ffmpeg's with the same option
   - Why: `CodecOptions` already passes any decoder option, so analysis that can take a slightly different picture (motion, cuts, thumbnails) can decode H.264 and HEVC faster today, but nothing says so; a test keeps it the same as the command line, as the rest is
   - Status: Open

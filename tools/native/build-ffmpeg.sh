@@ -17,8 +17,8 @@ set -eu
 
 VERSION=8.1.3
 SHA256=7138d28c96d9d3e3af4ee3d8cad72741f8ffb40da90c1112235dea3ecd3178a3
-ZLIB=1.3.2
-ZLIB_SHA256=bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16
+ZLIB=1.4
+ZLIB_SHA256=02dd159783677a749c04adbdd02b55b8a2bcc7e054f51b76b549199a916ad584
 DAV1D=1.5.4
 DAV1D_SHA256=686616b7c69eb88d44459391ab25cac13b6647a3b288835c5784e71c1514a5c5
 LAME=3.100
@@ -230,7 +230,7 @@ pkg() {
 {
   printf '{\n  "spdxVersion": "SPDX-2.3", "dataLicense": "CC0-1.0", "SPDXID": "SPDXRef-DOCUMENT",\n'
   printf '  "name": "FFmpeg %s for %s (FrameReader.Native)",\n' "$VERSION" "$rid"
-  printf '  "documentNamespace": "https://github.com/bisforboman/shotdetector/spdx/ffmpeg-%s-%s-%s",\n' "$VERSION" "$rid" "$(date -u +%Y%m%dT%H%M%SZ)"
+  printf '  "documentNamespace": "https://github.com/bisforboman/FrameReader/spdx/ffmpeg-%s-%s-%s",\n' "$VERSION" "$rid" "$(date -u +%Y%m%dT%H%M%SZ)"
   printf '  "creationInfo": {"created": "%s", "creators": ["Tool: tools/native/build-ffmpeg.sh"]},\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   printf '  "documentDescribes": ["SPDXRef-ffmpeg"],\n  "packages": [\n'
   pkg ffmpeg FFmpeg "$VERSION" LGPL-2.1-or-later "https://ffmpeg.org/releases/ffmpeg-$VERSION.tar.xz" "$SHA256" ffmpeg:ffmpeg; printf ',\n'
