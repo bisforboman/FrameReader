@@ -65,6 +65,21 @@ public sealed record RemuxOptions
     /// </summary>
     public TimeSpan? MinBufferTime { get; init; }
 
+    /// <summary>
+    /// Where the copy starts, from the input's start, as ffmpeg's input <c>-ss</c> (<c>ffmpeg -ss S -i IN -c copy OUT</c>);
+    /// null: the beginning. The input is seeked to the keyframe at or before it, and the copy starts there: exact where
+    /// every frame is a keyframe (DV, MJPEG, FFV1 with <c>-g 1</c>, PCM), keyframe-aligned otherwise. The output's
+    /// timestamps count from <see cref="Start"/>, so what lies before it has negative ones (an .mp4 gets an edit list that
+    /// hides it). Counted from the input's start time (<see cref="MediaInfo.StartTime"/>), as <c>-ss</c> is.
+    /// </summary>
+    public TimeSpan? Start { get; init; }
+
+    /// <summary>
+    /// Where the copy ends, from the input's start, as ffmpeg's input <c>-to</c>: each stream stops at its first packet
+    /// whose decoding time is at or after it. Null: the end. After <see cref="Start"/>, when both are set.
+    /// </summary>
+    public TimeSpan? End { get; init; }
+
     /// <summary>Common Encryption (CENC) of an .mp4 or DASH output, optionally with Widevine signalling for DASH; null: none.</summary>
     public EncryptionOptions? Encryption { get; init; }
 
@@ -87,10 +102,15 @@ public static unsafe class Remux
     /// selected stream (<see cref="FrameReaderError.InvalidInput"/>), or writing failed.</exception>
     /// <exception cref="ArgumentException">The muxer has no option of a <see cref="RemuxOptions.MuxerOptions"/> name, or
     /// <see cref="RemuxOptions.Encryption"/>'s key or key ID isn't 16 bytes as hex, or asks for Widevine on output other than DASH,
-    /// or <see cref="RemuxOptions.MinBufferTime"/> is negative, not for DASH to a file, or with a muxer option it can't go with.</exception>
+    /// or <see cref="RemuxOptions.MinBufferTime"/> is negative, not for DASH to a file, or with a muxer option it can't go with,
+    /// or <see cref="RemuxOptions.Start"/> is negative, or <see cref="RemuxOptions.End"/> isn't after it.</exception>
     public static void Copy(string input, string output, RemuxOptions? options = null, CancellationToken cancellationToken = default)
     {
         var o = options ?? new RemuxOptions();
+        if (o.Start < TimeSpan.Zero)
+            throw new ArgumentException("Start can't be negative.", nameof(options));
+        if (o.End is { } endAt && endAt <= (o.Start ?? TimeSpan.Zero))
+            throw new ArgumentException("End must come after Start (ffmpeg: \"-to value smaller than -ss\").", nameof(options));
 
         // The dash muxer finds the manifest's folder (where the segments go) by its last '/', so on Windows a path with
         // '\' put them in the working directory; ffmpeg needs '/' there too.
@@ -106,6 +126,14 @@ public static unsafe class Remux
             var map = Select(ic, o); // output stream i comes from input stream map[i]
             if (map.Count == 0)
                 throw new FrameReaderException(FrameReaderError.InvalidInput, $"\"{input}\" has no stream of the kinds asked for.");
+
+            // ffmpeg's input -ss: timestamps shift by the input's start time plus Start (no -copyts), after a seek there.
+            long inputStart = ic->start_time == ffmpeg.AV_NOPTS_VALUE ? 0 : ic->start_time;
+            long startUs = o.Start is { } ss ? ss.Ticks / (TimeSpan.TicksPerMillisecond / 1000) : 0;
+            if (o.Start is not null)
+                SeekLikeFfmpeg(ic, inputStart + startUs);
+            long tsOffset = -(inputStart + startUs);
+            long recordingTime = o.End is { } endTime ? (endTime.Ticks / (TimeSpan.TicksPerMillisecond / 1000)) - startUs : long.MaxValue;
 
             string url = OperatingSystem.IsWindows() && dash ? output.Replace('\\', '/') : output;
 
@@ -133,23 +161,29 @@ public static unsafe class Remux
                 AddStream(oc, ic->streams[map[i]], o.DisplayRotation);
             }
 
-            CopyMetadataAndChapters(ic, oc);
+            CopyMetadataAndChapters(ic, oc, tsOffset);
 
             if ((oc->oformat->flags & ffmpeg.AVFMT_NOFILE) == 0)
                 Check(ffmpeg.avio_open(&oc->pb, output, ffmpeg.AVIO_FLAG_WRITE), $"create \"{output}\"");
             WriteHeader(oc, muxerOptions);
 
-            // ffmpeg shifts every timestamp by the input's start time (no -copyts), drops each stream's packets before
-            // its first keyframe, and fixes up what the muxer would reject.
-            long tsOffset = ic->start_time == ffmpeg.AV_NOPTS_VALUE ? 0 : -ic->start_time;
+            // ffmpeg shifts every timestamp by the input's start time (and -ss; no -copyts), ends each stream at -to by
+            // its estimated decoding time, drops each stream's packets before its first keyframe, and fixes up what the
+            // muxer would reject.
             var started = new bool[map.Count];
+            var ended = new bool[map.Count];
+            int streamsEnded = 0;
+            var dtsEstimates = new DtsEstimate[map.Count];
+            for (int i = 0; i < map.Count; i++)
+                dtsEstimates[i] = new DtsEstimate(ic->streams[map[i]]);
             var lastDts = new long[map.Count];
             Array.Fill(lastDts, ffmpeg.AV_NOPTS_VALUE);
             var rescaleLast = new long[map.Count]; // av_rescale_delta's state, from 0 as in ffmpeg
             pkt = ffmpeg.av_packet_alloc();
-            var progress = new ProgressReporter(o.Progress, ic->duration > 0 ? TimeSpan.FromTicks(ic->duration * 10) : null);
-            double start = ic->start_time == ffmpeg.AV_NOPTS_VALUE ? 0 : ic->start_time / (double)ffmpeg.AV_TIME_BASE;
-            while ((ret = ffmpeg.av_read_frame(ic, pkt)) >= 0)
+            long total = ic->duration > 0 ? Math.Min(ic->duration - startUs, recordingTime) : recordingTime;
+            var progress = new ProgressReporter(o.Progress, total is > 0 and < long.MaxValue ? TimeSpan.FromTicks(total * 10) : null);
+            double start = -tsOffset / (double)ffmpeg.AV_TIME_BASE;
+            while (streamsEnded < map.Count && (ret = ffmpeg.av_read_frame(ic, pkt)) >= 0)
             {
                 if (cancellationToken.IsCancellationRequested)
                 {
@@ -161,17 +195,39 @@ public static unsafe class Remux
                     progress.Report(TimeSpan.FromSeconds(Math.Max(0, (pkt->pts * ffmpeg.av_q2d(ic->streams[pkt->stream_index]->time_base)) - start)));
 
                 int to = pkt->stream_index < outOf.Length ? outOf[pkt->stream_index] : -1;
-                if (to < 0 || (!started[to] && (pkt->flags & ffmpeg.AV_PKT_FLAG_KEY) == 0))
+                if (to < 0 || ended[to])
+                {
+                    ffmpeg.av_packet_unref(pkt);
+                    continue;
+                }
+
+                var tb = ic->streams[pkt->stream_index]->time_base;
+                if (pkt->dts != ffmpeg.AV_NOPTS_VALUE)
+                    pkt->dts += ffmpeg.av_rescale_q(tsOffset, AvTimeBaseQ, tb);
+                if (pkt->pts != ffmpeg.AV_NOPTS_VALUE)
+                    pkt->pts += ffmpeg.av_rescale_q(tsOffset, AvTimeBaseQ, tb);
+                long dtsEstimate = dtsEstimates[to].Update(pkt);
+                if (dtsEstimate >= recordingTime)
+                {
+                    ended[to] = true;
+                    streamsEnded++;
+                    ffmpeg.av_packet_unref(pkt);
+                    continue;
+                }
+
+                if (!started[to] && (pkt->flags & ffmpeg.AV_PKT_FLAG_KEY) == 0)
                 {
                     ffmpeg.av_packet_unref(pkt);
                     continue;
                 }
 
                 started[to] = true;
-                Write(ic, oc, pkt, to, tsOffset, ref lastDts[to], ref rescaleLast[to]);
+                if (pkt->dts == ffmpeg.AV_NOPTS_VALUE)
+                    pkt->dts = ffmpeg.av_rescale_q(dtsEstimate, AvTimeBaseQ, tb);
+                Write(ic, oc, pkt, to, ref lastDts[to], ref rescaleLast[to]);
             }
 
-            if (ret != ffmpeg.AVERROR_EOF)
+            if (ret < 0 && ret != ffmpeg.AVERROR_EOF)
                 Check(ret, "read", FrameReaderError.InvalidInput);
             Check(ffmpeg.av_write_trailer(oc), "write the trailer");
             progress.Done();
@@ -422,17 +478,20 @@ public static unsafe class Remux
             st->duration = ffmpeg.av_rescale_q(ist->duration, ist->time_base, st->time_base);
     }
 
-    /// <summary>The input's global metadata (less what ffmpeg drops) and its chapters, as ffmpeg copies them by default.</summary>
-    internal static void CopyMetadataAndChapters(AVFormatContext* ic, AVFormatContext* oc)
+    /// <summary>
+    /// The input's global metadata (less what ffmpeg drops) and its chapters, as ffmpeg copies them by default: shifted by
+    /// <paramref name="tsOffset"/> (AV_TIME_BASE units; null: minus the input's start time), those ending before 0 left out.
+    /// </summary>
+    internal static void CopyMetadataAndChapters(AVFormatContext* ic, AVFormatContext* oc, long? tsOffset = null)
     {
-        long tsOffset = ic->start_time == ffmpeg.AV_NOPTS_VALUE ? 0 : -ic->start_time;
+        long offset = tsOffset ?? (ic->start_time == ffmpeg.AV_NOPTS_VALUE ? 0 : -ic->start_time);
         if (ic->nb_chapters > 0)
         {
             oc->chapters = (AVChapter**)ffmpeg.av_calloc(ic->nb_chapters, (ulong)sizeof(AVChapter*));
             for (int i = 0; i < ic->nb_chapters; i++)
             {
                 var c = ic->chapters[i];
-                long off = ffmpeg.av_rescale_q(-tsOffset, new AVRational { num = 1, den = ffmpeg.AV_TIME_BASE }, c->time_base);
+                long off = ffmpeg.av_rescale_q(-offset, AvTimeBaseQ, c->time_base);
                 if (c->end < off)
                     continue;
                 var oc2 = (AVChapter*)ffmpeg.av_mallocz((ulong)sizeof(AVChapter));
@@ -450,17 +509,93 @@ public static unsafe class Remux
             ffmpeg.av_dict_set(&oc->metadata, key, null, 0);
     }
 
-    /// <summary>One packet to the muxer with ffmpeg's timestamp handling (the demuxer's offset, then fftools' mux fix-ups).</summary>
-    static void Write(AVFormatContext* ic, AVFormatContext* oc, AVPacket* pkt, int to, long tsOffset, ref long lastDts, ref long rescaleLast)
+    static readonly AVRational AvTimeBaseQ = new() { num = 1, den = ffmpeg.AV_TIME_BASE };
+
+    /// <summary>
+    /// ffmpeg's seek for an input -ss (fftools' ifile_open): to the keyframe at or before <paramref name="timestamp"/>,
+    /// 3/23 s earlier when a stream has B-frames and the format seeks by decoding time. A failed seek is only a warning there.
+    /// </summary>
+    static void SeekLikeFfmpeg(AVFormatContext* ic, long timestamp)
+    {
+        long seekTo = timestamp;
+        if ((ic->iformat->flags & ffmpeg.AVFMT_SEEK_TO_PTS) == 0)
+        {
+            for (int i = 0; i < ic->nb_streams; i++)
+            {
+                if (ic->streams[i]->codecpar->video_delay != 0)
+                {
+                    seekTo -= 3 * ffmpeg.AV_TIME_BASE / 23;
+                    break;
+                }
+            }
+        }
+
+        ffmpeg.avformat_seek_file(ic, -1, long.MinValue, seekTo, seekTo, 0);
+    }
+
+    /// <summary>
+    /// A stream's estimated decoding time in AV_TIME_BASE units, as fftools' demuxer keeps it (ist_dts_update): the
+    /// packet's own DTS when it has one, else the last one advanced by a frame. -to ends a stream by it.
+    /// </summary>
+    sealed class DtsEstimate(AVStream* st)
+    {
+        bool _sawFirst;
+        long _dts;
+        long _nextDts = ffmpeg.AV_NOPTS_VALUE;
+
+        public long Update(AVPacket* pkt)
+        {
+            var par = st->codecpar;
+            var tb = st->time_base;
+            if (!_sawFirst)
+            {
+                _dts = st->avg_frame_rate.num != 0 ? (long)(-par->video_delay * ffmpeg.AV_TIME_BASE / ffmpeg.av_q2d(st->avg_frame_rate)) : 0;
+                if (pkt->pts != ffmpeg.AV_NOPTS_VALUE)
+                    _dts += ffmpeg.av_rescale_q(pkt->pts, tb, AvTimeBaseQ);
+                _sawFirst = true;
+            }
+
+            if (_nextDts == ffmpeg.AV_NOPTS_VALUE)
+                _nextDts = _dts;
+            if (pkt->dts != ffmpeg.AV_NOPTS_VALUE)
+                _nextDts = ffmpeg.av_rescale_q(pkt->dts, tb, AvTimeBaseQ);
+            _dts = _nextDts;
+            switch (par->codec_type)
+            {
+                case AVMediaType.AVMEDIA_TYPE_AUDIO:
+                    _nextDts += par->sample_rate != 0
+                        ? (long)ffmpeg.AV_TIME_BASE * par->frame_size / par->sample_rate
+                        : ffmpeg.av_rescale_q(pkt->duration, tb, AvTimeBaseQ);
+                    break;
+                case AVMediaType.AVMEDIA_TYPE_VIDEO:
+                    if (pkt->duration != 0)
+                    {
+                        _nextDts += ffmpeg.av_rescale_q(pkt->duration, tb, AvTimeBaseQ);
+                    }
+                    else if (par->framerate.num != 0)
+                    {
+                        int fields = 2;
+                        var desc = ffmpeg.avcodec_descriptor_get(par->codec_id);
+                        var parser = ffmpeg.av_stream_get_parser(st);
+                        if (desc != null && (desc->props & ffmpeg.AV_CODEC_PROP_FIELDS) != 0 && parser != null)
+                            fields = 1 + parser->repeat_pict;
+                        var fieldRate = ffmpeg.av_mul_q(par->framerate, new AVRational { num = 2, den = 1 });
+                        _nextDts += ffmpeg.av_rescale_q(fields, ffmpeg.av_inv_q(fieldRate), AvTimeBaseQ);
+                    }
+
+                    break;
+            }
+
+            return _dts;
+        }
+    }
+
+    /// <summary>One packet, its timestamps already offset, to the muxer with fftools' mux fix-ups.</summary>
+    static void Write(AVFormatContext* ic, AVFormatContext* oc, AVPacket* pkt, int to, ref long lastDts, ref long rescaleLast)
     {
         var ist = ic->streams[pkt->stream_index];
         var st = oc->streams[to];
         var tb = ist->time_base;
-        var usec = new AVRational { num = 1, den = ffmpeg.AV_TIME_BASE };
-        if (pkt->dts != ffmpeg.AV_NOPTS_VALUE)
-            pkt->dts += ffmpeg.av_rescale_q(tsOffset, usec, tb);
-        if (pkt->pts != ffmpeg.AV_NOPTS_VALUE)
-            pkt->pts += ffmpeg.av_rescale_q(tsOffset, usec, tb);
         bool audio = st->codecpar->codec_type == AVMediaType.AVMEDIA_TYPE_AUDIO;
         if (audio && pkt->dts != ffmpeg.AV_NOPTS_VALUE)
             pkt->pts = pkt->dts;

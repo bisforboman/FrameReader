@@ -208,6 +208,13 @@ public sealed record MediaInfo
     /// <summary>The container's duration; null if unknown.</summary>
     public TimeSpan? Duration { get; init; }
 
+    /// <summary>
+    /// The container's start time (ffprobe's <c>format=start_time</c>): where its streams' timestamps start, which a
+    /// <see cref="RemuxOptions.Start"/> counts from (as ffmpeg's <c>-ss</c>). 0 for most files, about 1.4 s for MPEG-TS;
+    /// null if unknown.
+    /// </summary>
+    public TimeSpan? StartTime { get; init; }
+
     /// <summary>The first video stream; null if there is none.</summary>
     public VideoStreamInfo? Video { get; init; }
 

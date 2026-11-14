@@ -2,14 +2,17 @@
 
 A console app around FrameReader ([Program.cs](Program.cs), [TapeScan.cs](TapeScan.cs)). People and digitisation
 services capture a whole VHS, DV or DVD tape as one file; its ends and the gaps between recordings are blank. This
-reads such a capture once and reports, as JSON, the blank stretches it found and where to cut it. It writes no files:
-cutting by stream copy waits for a trim in `Remux` (docs/backlog.md; issue #23).
+reads such a capture once and reports, as JSON, the blank stretches it found and where to cut it; with `--write`, it
+also writes each recording as a file of its own, by stream copy (issue #23).
 
 ```bash
 FrameReader__Libraries=/path/to/ffmpeg-8-shared/lib dotnet run --project examples/TapeSplitter -- capture.dv
 ```
 
-Options: `--min-gap 2` (the shortest blank stretch, seconds), `--silence -60` (the silence level, dB).
+Options: `--min-gap 2` (the shortest blank stretch, seconds), `--silence -60` (the silence level, dB), `--write
+recordings` (write each recording into that folder as `recording-01.dv` and on, the capture's extension), `--as avi`
+(their container instead: FrameReader.Native's FFmpeg has no raw `dv` muxer, so write a .dv capture's recordings as
+`avi` or `mkv`, the DV frames unchanged).
 
 ```json
 {
@@ -65,10 +68,23 @@ span that runs to the end at the last frame (a FIXME in FFmpeg), freezedetect gi
 These rules are deliberately the simplest; better ones (how long a gap must be, whether picture and sound must agree)
 are a later step.
 
+## Writing the recordings
+
+`--write` (`TapeScan.Write`) copies each recording with `Remux.Copy`, `Start` and `End` at its edges: the file
+`ffmpeg -ss START -to END -i capture -c copy recording` writes, which the tests check byte for byte on the DV and FFV1
+tapes. A stream copy starts at a keyframe, so a recording is exact only where every frame is one:
+
+- **DV, MJPEG, FFV1 with `-g 1`** (as archives encode it): exact, the recording's frames and no others.
+- **FFV1 by default**: a keyframe every 12 frames (FFV1's frames between reuse the coder's state), so a recording
+  starts up to 11 frames early.
+- **MPEG-2 (DVD) and H.264**: from the keyframe at or before the start, up to a GOP early (half a second on a DVD);
+  the frames before have negative timestamps (an .mp4 hides them with an edit list, other players may show them).
+
+The report's times are on the stream's clock; `-ss` and `-to` count from the container's start time, so `Write`
+subtracts `MediaProbe.Probe(path).StartTime` (0 but for MPEG-TS and the like).
+
 ## What it doesn't do (yet)
 
-- **Write the recordings.** Needs `Remux.Copy` with a start and an end (the backlog's "Trimming with stream copy"):
-  exact for intra-only captures (DV, MJPEG, lossless), keyframe-aligned for MPEG-2 and H.264.
 - **Analogue noise** ("snow" on a VHS tape's unrecorded stretches): no FFmpeg filter names it, so it would be
   FrameReader's own measure, outside the promise that every figure is checked against ffmpeg. The owner's decision.
 - **A recording that starts with no gap** (a hard cut): cut detection (ShotDetector) or DV's recording date.
