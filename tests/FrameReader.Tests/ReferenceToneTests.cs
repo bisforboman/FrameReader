@@ -3,7 +3,7 @@ using FrameReader;
 
 /// <summary>
 /// ReferenceTone on clips made with ffmpeg's aevalsrc: line-up tone at the start, the end, interrupted, and programme
-/// sounds that must not count (a beep, held notes). Needs SHOTDETECTOR_FFMPEG_LIBS (an FFmpeg 8.1 shared build's
+/// sounds that must not count (a beep, held notes). Needs FRAMEREADER_FFMPEG_LIBS (an FFmpeg 8.1 shared build's
 /// folder with ffmpeg); without it these do nothing.
 /// </summary>
 public class ReferenceToneTests

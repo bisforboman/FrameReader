@@ -38,3 +38,7 @@ are in [ShotDetector's backlog-done.md](https://github.com/bisforboman/shotdetec
 - Trimming with stream copy: `Remux.Copy` with a start and an end, as ffmpeg's `-ss S -to E -i in -c copy` (keyframe-aligned start as there), checked against ffmpeg's output packet for packet
   - Why: the one FFMpegCore job (`FFMpeg.SubVideo`) FrameReader lacks; docs/coming-from-ffmpegcore.md says "not yet" (#11). The tape splitter (issue #23) needs it to write each recording as a file of its own: exact for intra-only captures (DV, MJPEG, FFV1 with -g 1), keyframe-aligned for MPEG-2 and H.264
   - Status: Done (2026-11-13): `RemuxOptions.Start` and `End`, byte for byte against `ffmpeg -ss S -to E -i in -c copy` on H.264 (mp4, mkv), MPEG-2 in MPEG-TS (its start time not 0), DV and FFV1; `MediaInfo.StartTime` for the time they count from; examples/TapeSplitter writes each recording with them (`--write`)
+
+- Rename the test environment variables from `SHOTDETECTOR_*` to `FRAMEREADER_*` (FFMPEG_LIBS, REQUIRE_X264, REQUIRE_SAME_BUILD, KEEP_DIFFERING, WIDEVINE_PSSH*, REALWORLD_AUDIO)
+  - Why: names from ShotDetector's repository; kept for the move so nothing else changed. Rename in the tests, the workflows, the session-start hook and CLAUDE.md in one PR
+  - Status: Done (2026-11-14)

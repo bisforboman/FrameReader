@@ -24,7 +24,7 @@ current numbers are in its latest run's summary. To run them on your own machine
 BENCH_VIDEOS="/path/a.mp4;/path/b.mkv" dotnet run -c Release --project benchmarks/FrameReader.Benchmarks -- --filter '*FFMpegCoreJobs*'
 ```
 
-(`SHOTDETECTOR_FFMPEG_LIBS`: a folder of FFmpeg 8's shared libraries; `BENCH_FFMPEG`: the folder with ffmpeg and
+(`FRAMEREADER_FFMPEG_LIBS`: a folder of FFmpeg 8's shared libraries; `BENCH_FFMPEG`: the folder with ffmpeg and
 ffprobe for FFMpegCore, else PATH.)
 
 ## What you install

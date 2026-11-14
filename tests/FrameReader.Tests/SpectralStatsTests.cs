@@ -5,7 +5,7 @@ using FrameReader;
 
 /// <summary>
 /// SpectralStats against ffmpeg's command line: what <c>-af aspectralstats=...,ametadata=print</c> prints, window for
-/// window and channel for channel. Needs SHOTDETECTOR_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg);
+/// window and channel for channel. Needs FRAMEREADER_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg);
 /// without it these do nothing.
 /// </summary>
 public class SpectralStatsTests

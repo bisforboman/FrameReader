@@ -8,7 +8,7 @@ using FrameReader;
 /// <see cref="SilenceFinder"/> against FFmpeg 8.1's silencedetect on the same float samples: one ffmpeg pass runs
 /// <c>aformat=flt,silencedetect</c> and writes the samples the filter saw (it passes them on unchanged), which the finder
 /// then reads in chunks of odd sizes. Every span's start and end must be the instant ffmpeg's log names (it prints
-/// microseconds, finer than a sample at these rates). Needs SHOTDETECTOR_FFMPEG_LIBS (an FFmpeg 8.1 folder with ffmpeg);
+/// microseconds, finer than a sample at these rates). Needs FRAMEREADER_FFMPEG_LIBS (an FFmpeg 8.1 folder with ffmpeg);
 /// without it these do nothing.
 /// </summary>
 public partial class SilenceFinderTests

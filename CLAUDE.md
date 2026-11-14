@@ -76,9 +76,9 @@ released, and a breaking change is a major version.
 
 - Cloud sessions: `.claude/hooks/session-start.sh` installs the .NET 10 SDK if missing, restores the tool and the
   solution, sets `core.hooksPath`, and puts BtbN's pinned FFmpeg 8.1 gpl-shared (in `~/.cache/framereader`) on PATH
-  and in `SHOTDETECTOR_FFMPEG_LIBS`.
+  and in `FRAMEREADER_FFMPEG_LIBS`.
 - `dotnet test FrameReader.slnx` (~5 min). One class: `--filter "FullyQualifiedName~SeekTests"`.
-- `SHOTDETECTOR_FFMPEG_LIBS` (the name from ShotDetector's repository): a folder of FFmpeg 8.1's shared libraries;
+- `FRAMEREADER_FFMPEG_LIBS`: a folder of FFmpeg 8.1's shared libraries;
   without it the in-process tests pass without checking. Our build: a ci.yml or native.yml run's `native-linux-x64`
   artifact, or BtbN's `gpl-shared` 8.1 archive from the release pinned in `.github/actions/btbn-ffmpeg/action.yml`.
 - The VideoWriter tests against x264 need `DOTNET_TieredCompilation=0` on AVX-512 CPUs (src/FrameReader/CLAUDE.md).

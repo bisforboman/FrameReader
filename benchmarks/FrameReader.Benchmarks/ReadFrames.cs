@@ -26,7 +26,7 @@ public class ReadFrames
         public Config() => AddJob(Job.Default.WithLaunchCount(1).WithWarmupCount(1).WithIterationCount(5).WithInvocationCount(1).WithUnrollFactor(1));
     }
 
-    static readonly string? Libs = Environment.GetEnvironmentVariable("SHOTDETECTOR_FFMPEG_LIBS");
+    static readonly string? Libs = Environment.GetEnvironmentVariable("FRAMEREADER_FFMPEG_LIBS");
     static readonly string FfmpegDir = Environment.GetEnvironmentVariable("BENCH_FFMPEG") ?? "";
 
     public static IEnumerable<string> Videos() =>

@@ -4,7 +4,7 @@ using FrameReader;
 
 /// <summary>
 /// VideoFrameReader's seek against ffmpeg's: the frame <c>ffmpeg -ss T -i X -frames:v 1</c> gives, byte for byte.
-/// Needs SHOTDETECTOR_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg); without it these do nothing.
+/// Needs FRAMEREADER_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg); without it these do nothing.
 /// </summary>
 public class SeekTests
 {

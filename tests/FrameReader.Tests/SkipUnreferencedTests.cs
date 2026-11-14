@@ -7,7 +7,7 @@ using FrameReader;
 /// <summary>
 /// VideoFrameReader leaves packets of frames nothing references out of the decoder when it reads forward past them
 /// (TryReadForwardTo, ReadAt, TryReadAt's seek, the TryTake methods): every frame it gives, its time and its tags, are
-/// byte for byte those of decoding every packet, on each codec, container and guard. Needs SHOTDETECTOR_FFMPEG_LIBS
+/// byte for byte those of decoding every packet, on each codec, container and guard. Needs FRAMEREADER_FFMPEG_LIBS
 /// (with an ffmpeg that has libx264, libx265 and libxvid, as CI's); without it these do nothing.
 /// </summary>
 public class SkipUnreferencedTests

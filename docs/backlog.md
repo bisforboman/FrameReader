@@ -23,10 +23,6 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
   - Why: only Linux (x64, ARM, musl) runs the tests here; the Windows struct-layout gotcha (src/FrameReader/CLAUDE.md) shows platform-only bugs exist
   - Status: Open
 
-- Rename the test environment variables from `SHOTDETECTOR_*` to `FRAMEREADER_*` (FFMPEG_LIBS, REQUIRE_X264, REQUIRE_SAME_BUILD, KEEP_DIFFERING, WIDEVINE_PSSH*, REALWORLD_AUDIO)
-  - Why: names from ShotDetector's repository; kept for the move so nothing else changed. Rename in the tests, the workflows, the session-start hook and CLAUDE.md in one PR
-  - Status: Open
-
 - At the next change to tools/native/build-ffmpeg.sh: its SBOM's documentNamespace to this repository's URL
   - Why: it still names github.com/bisforboman/shotdetector; any edit to the script rebuilds every platform's FFmpeg (the cache key), so it waits for a change that needs a rebuild anyway
   - Status: Open

@@ -28,7 +28,7 @@ public class ReadPaths
     [GlobalSetup]
     public void Setup()
     {
-        FFmpegLibraries.Load(Environment.GetEnvironmentVariable("SHOTDETECTOR_FFMPEG_LIBS"));
+        FFmpegLibraries.Load(Environment.GetEnvironmentVariable("FRAMEREADER_FFMPEG_LIBS"));
         _video = ReadFrames.Videos().First();
         _rotated = Path.Combine(Path.GetTempPath(), $"framereader-bench-rotated-{Environment.ProcessId}{Path.GetExtension(_video)}");
         if (Shape == "Bgr24-rotated90")
@@ -79,7 +79,7 @@ public class Sampling
     [GlobalSetup]
     public void Setup()
     {
-        FFmpegLibraries.Load(Environment.GetEnvironmentVariable("SHOTDETECTOR_FFMPEG_LIBS"));
+        FFmpegLibraries.Load(Environment.GetEnvironmentVariable("FRAMEREADER_FFMPEG_LIBS"));
         var duration = MediaProbe.Probe(Video).Duration ?? TimeSpan.FromMinutes(1);
         _times = [.. Enumerable.Range(0, (int)duration.TotalSeconds).Select(s => TimeSpan.FromSeconds(s))];
     }

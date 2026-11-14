@@ -3,7 +3,7 @@ using System.Globalization;
 using FrameReader;
 
 /// <summary>
-/// FrameDecoder through its public API, against ffmpeg/ffprobe on generated clips. Needs SHOTDETECTOR_FFMPEG_LIBS (an
+/// FrameDecoder through its public API, against ffmpeg/ffprobe on generated clips. Needs FRAMEREADER_FFMPEG_LIBS (an
 /// FFmpeg 8.1 shared build's folder with ffmpeg and ffprobe); without it these do nothing. ShotDetector's in-process
 /// tests check the frames byte for byte against the ffmpeg executable.
 /// </summary>

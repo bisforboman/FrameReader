@@ -3,7 +3,7 @@ using FrameReader;
 
 /// <summary>
 /// VideoFrameReader's promise: the bytes ffmpeg's command line gives for <c>-vf scale=W:H:flags=bicubic,format=F -f
-/// rawvideo</c>, frame for frame. Needs SHOTDETECTOR_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg);
+/// rawvideo</c>, frame for frame. Needs FRAMEREADER_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg);
 /// without it these do nothing.
 /// </summary>
 public class VideoFrameReaderTests

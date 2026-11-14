@@ -4,7 +4,7 @@ using FrameReader;
 /// <summary>
 /// The long one-call operations stop when asked: <see cref="Remux.Copy"/>, <see cref="WaveformData.Read"/> and
 /// <see cref="VideoFrameReader.ReadAt"/> with a cancelled token, and <see cref="Audio.Convert"/>, <see cref="Video.Transcode"/> and
-/// <see cref="MediaProbe.ProbeJsonAsync"/> while FFmpeg waits for a URL's next bytes. Needs SHOTDETECTOR_FFMPEG_LIBS; without
+/// <see cref="MediaProbe.ProbeJsonAsync"/> while FFmpeg waits for a URL's next bytes. Needs FRAMEREADER_FFMPEG_LIBS; without
 /// it, nothing.
 /// </summary>
 public class CancellationTests
