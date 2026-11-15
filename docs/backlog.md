@@ -60,11 +60,7 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
 ## Maybe
 
 - The tape splitter: a measure for analogue noise ("snow"), so a tape's unrecorded stretches count as gaps
-  - Why: a VHS tape's unrecorded stretches show noise, not black or blue, and none of the detectors finds it (issue #23). No FFmpeg filter names it, so it would be FrameReader's own figure, outside the promise that every figure is checked against ffmpeg: the owner decides whether to make one (docs/decisions/2026-11-09-tape-splitter-example.md)
-  - Status: Maybe
-
-- The tape splitter: cut points for recordings that start with no gap (a hard cut), and the rules from spans to cut points (how long a blank counts, whether picture and sound must agree, the thresholds)
-  - Why: the first slice cuts only at blank stretches the picture shows, silence reported beside them. A recording that starts straight after another needs a cut detector (ShotDetector's territory) or DV's recording date where the stream has it (dvrescue's dvpackager splits DV that way) (issue #23)
+  - Why: a VHS tape's unrecorded stretches show noise, not black or blue, and none of the detectors finds it (issue #23). No FFmpeg filter names it, so it would be FrameReader's own figure, outside the promise that every figure is checked against ffmpeg: the owner decides whether to make one (docs/decisions/2026-11-09-tape-splitter-example.md); not approved on 2026-11-15, when issue #23 closed with this row left (docs/decisions/2026-11-15-tape-splitter-cut-rules.md)
   - Status: Maybe
 
 - Segment decoders inside `ReadAhead`: several decoders on different parts of the file
