@@ -42,3 +42,11 @@ are in [ShotDetector's backlog-done.md](https://github.com/bisforboman/shotdetec
 - Rename the test environment variables from `SHOTDETECTOR_*` to `FRAMEREADER_*` (FFMPEG_LIBS, REQUIRE_X264, REQUIRE_SAME_BUILD, KEEP_DIFFERING, WIDEVINE_PSSH*, REALWORLD_AUDIO)
   - Why: names from ShotDetector's repository; kept for the move so nothing else changed. Rename in the tests, the workflows, the session-start hook and CLAUDE.md in one PR
   - Status: Done (2026-11-14)
+
+- At the next change to tools/native/build-ffmpeg.sh: its SBOM's documentNamespace to this repository's URL
+  - Why: it still names github.com/bisforboman/shotdetector; any edit to the script rebuilds every platform's FFmpeg (the cache key), so it waits for a change that needs a rebuild anyway
+  - Status: Done (2026-11-12), with the move to zlib 1.4 (#22)
+
+- The raw `dv` muxer in the native build, so `Remux.Copy` writes .dv files with FrameReader.Native
+  - Why: the build enables only the muxers FrameReader uses (tools/native/build-ffmpeg.sh), and `dv` isn't one, so the tape splitter writes a .dv capture's recordings as AVI or Matroska (`--as`; found by PR #26's arm job). An edit to the script rebuilds every platform's FFmpeg, so it waits for a change that needs a rebuild anyway
+  - Status: Done (2026-11-15), with the move to zlib 1.4 (#22), the owner's choice (docs/decisions/2026-11-15-dv-muxer-with-zlib-rebuild.md): `--enable-muxer=dv`, `Remux.Copy` to .dv byte for byte against `ffmpeg -c copy` (trimmed, whole, and from AVI). The splitter's docs and test follow in a row of their own (docs/backlog.md)

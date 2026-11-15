@@ -93,7 +93,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ## zlib (zlib licence), FrameReader.Native.<rid>
 
-zlib 1.3.2 (https://zlib.net), linked into FFmpeg's libraries. Copyright (C) 1995-2026 Jean-loup Gailly and Mark
+zlib 1.4 (https://zlib.net), linked into FFmpeg's libraries. Copyright (C) 1995-2026 Jean-loup Gailly and Mark
 Adler. Provided 'as-is', without any express or implied warranty; see https://zlib.net/zlib_license.html.
 
 ## OpenSSL (Apache License 2.0), FrameReader.Native.<rid> on Linux

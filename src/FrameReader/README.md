@@ -436,7 +436,7 @@ Remux.Copy("film.mp4", "out/manifest.mpd", new()
 });
 ```
 
-Our native libraries carry the AAC, MP3 and 16-bit PCM encoders and the mp4, mov, ipod (.m4a), matroska, matroska_audio (.mka), webm, adts, mp3, wav, flac, ogg, opus, mpegts, srt, webvtt, ass and dash muxers.
+Our native libraries carry the AAC, MP3 and 16-bit PCM encoders and the mp4, mov, ipod (.m4a), avi, dv (raw .dv, since the build with zlib 1.4), matroska, matroska_audio (.mka), webm, adts, mp3, wav, flac, ogg, opus, mpegts, srt, webvtt, ass and dash muxers.
 A whole file re-encoded in one call: `Video.Transcode(input, output, options)` is `ffmpeg -i IN [-vf yadif] -c:v E
 -pix_fmt yuv420p -g G -force_key_frames ... OUT`, for making a source that isn't ready for DASH ready for `Remux.Copy`:
 deinterlaced when the stream is flagged interlaced (`Deinterlace`: null by default; true or false to force), frames

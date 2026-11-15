@@ -49,6 +49,7 @@ public class FFmpegLibrariesTests
         Assert.True(FFmpegLibraries.HasFilter("format"));
         Assert.True(FFmpegLibraries.HasMuxer("mp3"));
         Assert.True(FFmpegLibraries.HasMuxer("matroska"));
+        Assert.True(FFmpegLibraries.HasMuxer("dv"));        // FrameReader.Native since the build with zlib 1.4: Remux.Copy to .dv
         Assert.False(FFmpegLibraries.HasEncoder("nosuchencoder"));
         Assert.False(FFmpegLibraries.HasFilter("nosuchfilter"));
         Assert.False(FFmpegLibraries.HasMuxer("nosuchmuxer"));

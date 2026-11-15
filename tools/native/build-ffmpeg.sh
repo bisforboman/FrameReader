@@ -17,8 +17,8 @@ set -eu
 
 VERSION=8.1.3
 SHA256=7138d28c96d9d3e3af4ee3d8cad72741f8ffb40da90c1112235dea3ecd3178a3
-ZLIB=1.3.2
-ZLIB_SHA256=bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16
+ZLIB=1.4
+ZLIB_SHA256=02dd159783677a749c04adbdd02b55b8a2bcc7e054f51b76b549199a916ad584
 DAV1D=1.5.4
 DAV1D_SHA256=686616b7c69eb88d44459391ab25cac13b6647a3b288835c5784e71c1514a5c5
 LAME=3.100
@@ -138,6 +138,7 @@ export PKG_CONFIG_LIBDIR="$deps/lib/pkgconfig"
 # file; not libwebp_anim, which `ffmpeg out.webp` picks first where it's built). No --enable-gpl/--enable-nonfree, and --disable-autodetect keeps system
 # libraries (and their licences) out: zlib, dav1d, LAME and libwebp are the ones built above, linked in. Protocols: the local ones, and
 # http (with tcp) for URLs in-process, and https: Windows' Schannel, macOS's Secure Transport, OpenSSL on Linux.
+# The dv muxer (raw .dv) so Remux.Copy writes a DV capture's recordings as .dv (issue #23's tape splitter).
 set -- --prefix="$work/install" --enable-shared --disable-static --enable-pic \
   --disable-programs --disable-doc --disable-avdevice --disable-filters --enable-filter=buffer,buffersink,abuffer,abuffersink,yadif,fps,aspectralstats,format,null,scale \
   --enable-filter=volume,equalizer,bass,treble,highpass,lowpass,bandpass,bandreject,afade,pan,acompressor,alimiter,dynaudnorm,agate,ebur128,loudnorm,silencedetect,astats,aformat,aresample \
@@ -145,7 +146,7 @@ set -- --prefix="$work/install" --enable-shared --disable-static --enable-pic \
   --disable-protocols --enable-protocol=file,pipe,fd,data,crypto,cache,async,concat,concatf,subfile,md5,tee,hls,http,httpproxy,tcp,https,tls \
   --disable-encoders --disable-muxers --disable-autodetect \
   --enable-libmp3lame --enable-libwebp --enable-encoder=aac,libmp3lame,pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le,mpeg2video,mpeg4,png,mjpeg,libwebp \
-  --enable-muxer=mp4,mov,ipod,avi,matroska,matroska_audio,webm,adts,mp3,wav,flac,ogg,opus,mpegts,mpeg1system,image2,srt,webvtt,ass,dash \
+  --enable-muxer=mp4,mov,ipod,avi,dv,matroska,matroska_audio,webm,adts,mp3,wav,flac,ogg,opus,mpegts,mpeg1system,image2,srt,webvtt,ass,dash \
   --enable-zlib --enable-libdav1d --pkg-config=pkg-config --pkg-config-flags=--static \
   --extra-cflags=-I"$deps/include" --extra-ldflags=-L"$deps/lib" \
   --disable-debug --enable-stripping --enable-optimizations
@@ -230,7 +231,7 @@ pkg() {
 {
   printf '{\n  "spdxVersion": "SPDX-2.3", "dataLicense": "CC0-1.0", "SPDXID": "SPDXRef-DOCUMENT",\n'
   printf '  "name": "FFmpeg %s for %s (FrameReader.Native)",\n' "$VERSION" "$rid"
-  printf '  "documentNamespace": "https://github.com/bisforboman/shotdetector/spdx/ffmpeg-%s-%s-%s",\n' "$VERSION" "$rid" "$(date -u +%Y%m%dT%H%M%SZ)"
+  printf '  "documentNamespace": "https://github.com/bisforboman/FrameReader/spdx/ffmpeg-%s-%s-%s",\n' "$VERSION" "$rid" "$(date -u +%Y%m%dT%H%M%SZ)"
   printf '  "creationInfo": {"created": "%s", "creators": ["Tool: tools/native/build-ffmpeg.sh"]},\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   printf '  "documentDescribes": ["SPDXRef-ffmpeg"],\n  "packages": [\n'
   pkg ffmpeg FFmpeg "$VERSION" LGPL-2.1-or-later "https://ffmpeg.org/releases/ffmpeg-$VERSION.tar.xz" "$SHA256" ffmpeg:ffmpeg; printf ',\n'
