@@ -53,11 +53,11 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
   - Why: CI's VideoWriter step needs DOTNET_TieredCompilation=0 because x264's AVX-512 code and .NET's tiered JIT differ about 1 run in 250 (docs/decisions/2026-10-10-videowriter-s-rare-ci-mismatch.md). A public post from the owner's account
   - Status: Waiting (on the owner)
 
-## Maybe
+- The tape splitter: .dv recordings from a .dv capture with FrameReader.Native, once a release carries its `dv` muxer
+  - Why: the native build has the raw `dv` muxer since the rebuild with zlib 1.4 (#22), but examples/TapeSplitter's README, `TapeScan`'s doc comment and its test still say it has none and send a .dv capture's recordings into AVI (`--as avi`). Say .dv works, and test `--write` of a DV capture as .dv against ffmpeg's files. Left out of #22 because issue #23's session was editing the splitter then
+  - Status: Open
 
-- The raw `dv` muxer in the native build, so `Remux.Copy` writes .dv files with FrameReader.Native
-  - Why: the build enables only the muxers FrameReader uses (tools/native/build-ffmpeg.sh), and `dv` isn't one, so the tape splitter writes a .dv capture's recordings as AVI or Matroska (`--as`; found by PR #26's arm job). An edit to the script rebuilds every platform's FFmpeg, so it waits for a change that needs a rebuild anyway
-  - Status: Maybe
+## Maybe
 
 - The tape splitter: a measure for analogue noise ("snow"), so a tape's unrecorded stretches count as gaps
   - Why: a VHS tape's unrecorded stretches show noise, not black or blue, and none of the detectors finds it (issue #23). No FFmpeg filter names it, so it would be FrameReader's own figure, outside the promise that every figure is checked against ffmpeg: the owner decides whether to make one (docs/decisions/2026-11-09-tape-splitter-example.md)

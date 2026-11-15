@@ -86,18 +86,28 @@ public class RemuxTests
 
     // Start and End: ffmpeg's input -ss and -to with stream copy (the backlog's trimming, issue #23's tape splitter):
     // keyframe-aligned where there are B-frames and GOPs (H.264, MPEG-2), exact where every frame is a keyframe (DV,
-    // FFV1 with -g 1 and PCM), the MPEG-TS input's start time not 0. -1: not set.
+    // FFV1 with -g 1 and PCM), the MPEG-TS input's start time not 0. -1: not set. DV in AVI and as raw .dv (the dv
+    // muxer, which takes its audio as 48 kHz stereo PCM and writes it into the DV frames), each way and whole.
     [Theory]
     [InlineData("in.mp4", "-c:v libx264 -g 12 -bf 2 -c:a aac", "cut.mp4", 1300, 2600)]
     [InlineData("in.mp4", "-c:v libx264 -g 12 -bf 2 -c:a aac", "cut.mkv", 1300, -1)]
     [InlineData("in.mp4", "-c:v libx264 -g 12 -bf 2 -c:a aac", "head.mp4", -1, 2000)]
     [InlineData("in.avi", "-c:v dvvideo -s 720x576 -pix_fmt yuv420p -c:a pcm_s16le -ar 48000", "cut.avi", 520, 2200)]
+    [InlineData("in.dv", "-c:v dvvideo -s 720x576 -pix_fmt yuv420p -c:a pcm_s16le -ar 48000 -ac 2", "cut.dv", 520, 2200)]
+    [InlineData("in.dv", "-c:v dvvideo -s 720x576 -pix_fmt yuv420p -c:a pcm_s16le -ar 48000 -ac 2", "whole.dv", -1, -1)]
+    [InlineData("in.dv", "-c:v dvvideo -s 720x576 -pix_fmt yuv420p -c:a pcm_s16le -ar 48000 -ac 2", "cut.avi", 520, 2200)]
+    [InlineData("in.avi", "-c:v dvvideo -s 720x576 -pix_fmt yuv420p -c:a pcm_s16le -ar 48000 -ac 2", "cut.dv", 520, 2200)]
     [InlineData("in.mkv", "-c:v ffv1 -g 1 -c:a pcm_s16le", "cut.mkv", 1040, 2000)]
     [InlineData("in.ts", "-c:v mpeg2video -g 12 -bf 2 -c:a mp2", "cut.ts", 700, 2300)]
     [InlineData("in.ts", "-c:v mpeg2video -g 12 -bf 2 -c:a mp2", "cut.mp4", 700, 2300)]
     public void TrimIsFfmpegs(string source, string make, string output, int startMs, int endMs)
     {
         if (Libs is null)
+            return;
+
+        // Raw DV out needs the dv muxer: in FrameReader.Native since the build with zlib 1.4, and in full builds.
+        // FFmpegLibrariesTests fails libraries without it, once, rather than each row here.
+        if (output.EndsWith(".dv", StringComparison.Ordinal) && !FFmpegLibraries.HasMuxer("dv"))
             return;
         string dir = Directory.CreateTempSubdirectory("framereader-remux-").FullName;
         try

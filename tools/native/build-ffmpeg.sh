@@ -138,6 +138,7 @@ export PKG_CONFIG_LIBDIR="$deps/lib/pkgconfig"
 # file; not libwebp_anim, which `ffmpeg out.webp` picks first where it's built). No --enable-gpl/--enable-nonfree, and --disable-autodetect keeps system
 # libraries (and their licences) out: zlib, dav1d, LAME and libwebp are the ones built above, linked in. Protocols: the local ones, and
 # http (with tcp) for URLs in-process, and https: Windows' Schannel, macOS's Secure Transport, OpenSSL on Linux.
+# The dv muxer (raw .dv) so Remux.Copy writes a DV capture's recordings as .dv (issue #23's tape splitter).
 set -- --prefix="$work/install" --enable-shared --disable-static --enable-pic \
   --disable-programs --disable-doc --disable-avdevice --disable-filters --enable-filter=buffer,buffersink,abuffer,abuffersink,yadif,fps,aspectralstats,format,null,scale \
   --enable-filter=volume,equalizer,bass,treble,highpass,lowpass,bandpass,bandreject,afade,pan,acompressor,alimiter,dynaudnorm,agate,ebur128,loudnorm,silencedetect,astats,aformat,aresample \
@@ -145,7 +146,7 @@ set -- --prefix="$work/install" --enable-shared --disable-static --enable-pic \
   --disable-protocols --enable-protocol=file,pipe,fd,data,crypto,cache,async,concat,concatf,subfile,md5,tee,hls,http,httpproxy,tcp,https,tls \
   --disable-encoders --disable-muxers --disable-autodetect \
   --enable-libmp3lame --enable-libwebp --enable-encoder=aac,libmp3lame,pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le,mpeg2video,mpeg4,png,mjpeg,libwebp \
-  --enable-muxer=mp4,mov,ipod,avi,matroska,matroska_audio,webm,adts,mp3,wav,flac,ogg,opus,mpegts,mpeg1system,image2,srt,webvtt,ass,dash \
+  --enable-muxer=mp4,mov,ipod,avi,dv,matroska,matroska_audio,webm,adts,mp3,wav,flac,ogg,opus,mpegts,mpeg1system,image2,srt,webvtt,ass,dash \
   --enable-zlib --enable-libdav1d --pkg-config=pkg-config --pkg-config-flags=--static \
   --extra-cflags=-I"$deps/include" --extra-ldflags=-L"$deps/lib" \
   --disable-debug --enable-stripping --enable-optimizations
