@@ -11,7 +11,8 @@ using TapeSplitter;
 /// silencedetect's (on the samples as floats, <c>aformat=flt</c>, as <see cref="SilenceFinder"/> takes them) with
 /// <c>-copyts</c>; the flat colours (no FFmpeg filter) and the gaps, cut points and recordings are what the tape was
 /// made of. As a lossless capture (FFV1, PCM), as DV (the codec of DV tapes and their captures) and at 10 bits 4:2:2
-/// without sound. Needs FRAMEREADER_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg); without it these do
+/// without sound. The rules from spans to gaps (how long, the sound agreeing, glitches, which detectors, their
+/// thresholds) on a second tape, each set of options' spans against the filters with the same options. Needs FRAMEREADER_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg); without it these do
 /// nothing.
 /// </summary>
 public partial class TapeScanTests
@@ -42,12 +43,7 @@ public partial class TapeScanTests
             bool sound = encode.Contains("-c:a", StringComparison.Ordinal);
             var report = TapeScan.Run(path);
 
-            // blackdetect, freezedetect and silencedetect in one pass, on the stream's own timestamps.
-            string log = Ffmpeg(["-hide_banner", "-nostats", "-nostdin", "-copyts", "-i", path, "-vf", "blackdetect,freezedetect",
-                .. sound ? ["-af", "aformat=sample_fmts=flt,silencedetect"] : Array.Empty<string>(), "-f", "null", "-"]);
-            Same("black", report, [.. Black().Matches(log).Select(m => (m.Groups[1].Value, (string?)m.Groups[2].Value))]);
-            Same("frozen", report, Frozen(log));
-            Same("silence", report, [.. Silence(log).Select(s => (s.Item1, (string?)s.Item2))]);
+            SameAsFilters(path, report, new TapeScanOptions(), sound);
             Assert.Equal(sound, report.Spans.Any(s => s.Kind == "silence"));
 
             // The flat colours: black (16, 128, 128) at either end, the blue screen between the first two recordings.
@@ -70,6 +66,93 @@ public partial class TapeScanTests
         finally
         {
             Directory.Delete(dir, true);
+        }
+    }
+
+    // Inputs 0 to 12, the sound 13: black 2 s; a recording 3 s; black 1 s then blue 1.6 s (neither a gap alone); a
+    // recording 3 s, its last frame held 3 s with the sound going on (a still with music); a recording 3 s; black 2 s,
+    // a glitch of 0.4 s, blue 3 s; a recording 3 s; black 3 s, the sound going on for its first second; a recording
+    // 3 s, its last frame held 3 s under noise (frozen only to a looser freezedetect); dark grey 3 s to the end (black
+    // only to a looser blackdetect). 37 s.
+    const string Rules = "-f lavfi -i color=black:{0}:d=2 -f lavfi -i testsrc2={0}:d=3 -f lavfi -i color=black:{0}:d=1 -f lavfi -i color=0x1010d0:{0}:d=1.6 "
+        + "-f lavfi -i testsrc2={0}:d=3 -f lavfi -i testsrc2={0}:d=3 -f lavfi -i color=black:{0}:d=2 -f lavfi -i testsrc2={0}:d=0.4 "
+        + "-f lavfi -i color=0x1010d0:{0}:d=3 -f lavfi -i testsrc2={0}:d=3 -f lavfi -i color=black:{0}:d=3 -f lavfi -i testsrc2={0}:d=3 "
+        + "-f lavfi -i color=0x313131:{0}:d=3 "
+        + "-f lavfi -i aevalsrc=0.3*sin(2*PI*440*t)*(between(t\\,2\\,5)+between(t\\,7.6\\,16.6)+between(t\\,22\\,26.02)+between(t\\,28\\,31)):s=48000:c=stereo:d=37 "
+        + "-filter_complex [4]tpad=stop_mode=clone:stop_duration=3[b];[11]tpad=stop_mode=clone:stop_duration=3,noise=alls=6:allf=t:enable='gte(t,3)'[e];"
+        + "[0][1][2][3][b][5][6][7][8][9][10][e][12]concat=n=13:v=1:a=0,format=yuv420p[v] -map [v] -map 13:a -c:v ffv1 -c:a pcm_s16le";
+
+    // The rules from spans to gaps. Every set of options' spans are the filters' with the same options; the gaps are
+    // what the tape was made of (a held frame's gap starts at the recording's last frame, 0.04 s before the hold).
+    [Fact]
+    public void RulesFromSpansToGaps()
+    {
+        if (Libs is null)
+            return;
+        string dir = Directory.CreateTempSubdirectory("framereader-tape-").FullName;
+        try
+        {
+            string path = Path.Combine(dir, "rules.mkv");
+            Ffmpeg(["-v", "error", "-y", .. string.Format(CultureInfo.InvariantCulture, Rules, "s=320x240:r=25").Split(' '), path]);
+
+            // The defaults: the second of black and the blue after it make one gap (spans from 0.5 s, gaps from 2 s),
+            // the still is one though its sound goes on, the glitch between black and blue is part of their gap, and
+            // the black with sound in its first second is a gap from its first frame. The noisy still and the dark
+            // grey: only the grey, as a flat colour.
+            var defaults = Gaps(path, new TapeScanOptions());
+            Assert.Equal([(0, 2), (5, 7.6), (10.56, 13.6), (16.6, 22), (25, 28), (34, 37)], defaults.Gaps.Select(g => (g.Start, g.End)));
+            Assert.Equal(["black", "flat", "frozen"], defaults.Gaps[1].Kinds);
+            Assert.Equal(["frozen"], defaults.Gaps[2].Kinds);
+            Assert.Equal(["flat", "frozen"], defaults.Gaps[5].Kinds);
+            Assert.Equal([2, 2.6, 0, 5.4, 1.98, 3], defaults.Gaps.Select(g => Math.Round(g.Silence, 3)));
+            Assert.Equal([new Recording(2, 5), new Recording(7.6, 10.56), new Recording(13.6, 16.6), new Recording(22, 25), new Recording(28, 34)], defaults.Recordings);
+            Assert.Equal([2, 5, 7.6, 10.56, 13.6, 16.6, 22, 25, 28, 34], defaults.Cuts);
+
+            // Spans from 2 s, as the filters' own default: the black and the blue are no gap.
+            var whole = Gaps(path, new TapeScanOptions { MinSpan = TimeSpan.FromSeconds(2) });
+            Assert.Equal([(0, 2), (10.56, 13.6), (16.6, 22), (25, 28), (34, 37)], whole.Gaps.Select(g => (g.Start, g.End)));
+
+            // Every stretch a recording: the glitch is one.
+            var glitch = Gaps(path, new TapeScanOptions { MinRecording = TimeSpan.Zero });
+            Assert.Equal([(0, 2), (5, 7.6), (10.56, 13.6), (16.6, 18.6), (19, 22), (25, 28), (34, 37)], glitch.Gaps.Select(g => (g.Start, g.End)));
+            Assert.Contains(new Recording(18.6, 19), glitch.Recordings);
+
+            // The sound must agree: the still with music is no gap, and the black's gap starts where its sound stops
+            // (silencedetect's start, half a frame into the black's second second: 1.98 s, a gap within a frame of 2 s).
+            var agreed = Gaps(path, new TapeScanOptions { Sound = SoundRule.Agree });
+            Assert.Equal([(0, 2), (5, 7.6), (16.6, 22), (26.02, 28), (34, 37)], agreed.Gaps.Select(g => (Math.Round(g.Start, 3), Math.Round(g.End, 3))));
+            Assert.All(agreed.Gaps, g => Assert.Equal(Math.Round(g.End - g.Start, 6), g.Silence));
+            Assert.Contains(agreed.Spans, s => s.Kind == "silence" && s.Start == agreed.Gaps[3].Start);
+
+            // blackdetect alone, then with a pixel threshold that takes the dark grey (and the blue screen's luma).
+            var black = Gaps(path, new TapeScanOptions { Kinds = ["black"] });
+            Assert.Equal([(0, 2), (16.6, 18.6), (25, 28)], black.Gaps.Select(g => (g.Start, g.End)));
+            Assert.All(black.Spans, s => Assert.Contains(s.Kind, new[] { "black", "silence" }));
+            var darker = Gaps(path, new TapeScanOptions { Kinds = ["black"], BlackPixel = 0.2 });
+            Assert.Equal([(0, 2), (5, 7.6), (16.6, 22), (25, 28), (34, 37)], darker.Gaps.Select(g => (g.Start, g.End)));
+
+            // freezedetect with more noise let through: the noisy still is frozen, and one gap with the grey after it.
+            var noisy = Gaps(path, new TapeScanOptions { FreezeNoise = 0.02 });
+            Assert.Equal(6, noisy.Gaps.Count);
+            Assert.InRange(noisy.Gaps[5].Start, 30.8, 31);
+            Assert.Equal(37, noisy.Gaps[5].End);
+
+            // A louder silence level and a pic_th: the spans are the filters' still.
+            Gaps(path, new TapeScanOptions { SilenceLevel = -20, BlackPicture = 0.5, MinGap = TimeSpan.FromSeconds(1), MinSpan = TimeSpan.FromSeconds(1) });
+
+            Assert.Throws<ArgumentException>(() => TapeScan.Run(path, new TapeScanOptions { MinSpan = TimeSpan.FromSeconds(3) }));
+            Assert.Throws<ArgumentException>(() => TapeScan.Run(path, new TapeScanOptions { Kinds = ["snow"] }));
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+
+        static TapeReport Gaps(string path, TapeScanOptions options)
+        {
+            var report = TapeScan.Run(path, options);
+            SameAsFilters(path, report, options, sound: true);
+            return report;
         }
     }
 
@@ -108,6 +191,20 @@ public partial class TapeScanTests
         }
 
         static string Text(double seconds) => (TapeScan.Microseconds(seconds) / 1e6).ToString("0.######", CultureInfo.InvariantCulture);
+    }
+
+    // The report's black, frozen and silent spans against blackdetect, freezedetect and silencedetect with the same
+    // options, in one pass on the stream's own timestamps. A detector left out of the options reports nothing.
+    static void SameAsFilters(string path, TapeReport report, TapeScanOptions o, bool sound)
+    {
+        string d = o.MinSpan.TotalSeconds.ToString(CultureInfo.InvariantCulture);
+        FormattableString video = $"blackdetect=d={d}:pix_th={o.BlackPixel}:pic_th={o.BlackPicture},freezedetect=d={d}:n={o.FreezeNoise}";
+        FormattableString audio = $"aformat=sample_fmts=flt,silencedetect=d={d}:n={o.SilenceLevel}dB";
+        string log = Ffmpeg(["-hide_banner", "-nostats", "-nostdin", "-copyts", "-i", path, "-vf", FormattableString.Invariant(video),
+            .. sound ? ["-af", FormattableString.Invariant(audio)] : Array.Empty<string>(), "-f", "null", "-"]);
+        Same("black", report, o.Kinds.Contains("black") ? [.. Black().Matches(log).Select(m => (m.Groups[1].Value, (string?)m.Groups[2].Value))] : []);
+        Same("frozen", report, o.Kinds.Contains("frozen") ? Frozen(log) : []);
+        Same("silence", report, [.. Silence(log).Select(s => (s.Item1, (string?)s.Item2))]);
     }
 
     // One detector's spans in the report against FFmpeg's printed times (null: no end printed).
