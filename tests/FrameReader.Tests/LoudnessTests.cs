@@ -7,7 +7,7 @@ using FrameReader;
 /// Loudness against ffmpeg's command line running the same ebur128 graph: integrated loudness and the range equal to
 /// the last metadata's three decimals (the filter's figures change only when a 100 ms block completes, which is when
 /// metadata is attached), peaks equal to the Summary's one decimal and, on clips of whole 100 ms blocks, to the
-/// metadata's three (linear). Needs SHOTDETECTOR_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg);
+/// metadata's three (linear). Needs FRAMEREADER_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg);
 /// without it these do nothing.
 /// </summary>
 public class LoudnessTests

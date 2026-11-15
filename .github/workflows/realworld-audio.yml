@@ -49,13 +49,13 @@ jobs:
 
       - name: Compare with ffmpeg
         env:
-          SHOTDETECTOR_FFMPEG_LIBS: ${{ steps.ffmpeg.outputs.bin }}
+          FRAMEREADER_FFMPEG_LIBS: ${{ steps.ffmpeg.outputs.bin }}
         run: |
           dotnet build tests/FrameReader.Tests -v q > /dev/null
           status=0
           for f in $FILMS $OPUS; do
             echo "::group::$f"
-            export SHOTDETECTOR_REALWORLD_AUDIO=$(python3 tools/media.py "$f" --download | tail -1)
+            export FRAMEREADER_REALWORLD_AUDIO=$(python3 tools/media.py "$f" --download | tail -1)
             if dotnet test tests/FrameReader.Tests --no-build --filter "FullyQualifiedName~RealWorldAudio" --logger GitHubActions; then r=identical; else r=DIFFERS; status=1; fi
             echo "::endgroup::"
             echo "| $f | $r |" >> results.md

@@ -5,7 +5,7 @@ using FrameReader;
 /// <summary>
 /// <see cref="AudioReaderOptions.Stream"/>: the audio stream ffmpeg's <c>-map 0:a:N</c> reads, byte for byte, in a file
 /// with several (a stereo mix and a 5.1 one, as deliveries carry), and a number past the last refused. Needs
-/// SHOTDETECTOR_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg); without it these do nothing.
+/// FRAMEREADER_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg); without it these do nothing.
 /// </summary>
 public class AudioStreamChoiceTests
 {

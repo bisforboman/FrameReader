@@ -9,7 +9,7 @@ using FrameReader;
 /// and blackdetect (d=0 and its default 2 s), which our FFmpeg build doesn't carry. YMIN and YMAX equal, YAVG and BRNG to
 /// the digits FFmpeg prints, cropdetect's eight figures equal, blackdetect's spans equal to the digits printed (-copyts:
 /// the stream's own pts), the picture types ffprobe's. At 8 and 10 bits, 4:2:0, 4:2:2 and 4:4:4, limited and full range.
-/// Colour bars, which no FFmpeg filter finds, by what each clip holds. Needs SHOTDETECTOR_FFMPEG_LIBS (an FFmpeg 8.1
+/// Colour bars, which no FFmpeg filter finds, by what each clip holds. Needs FRAMEREADER_FFMPEG_LIBS (an FFmpeg 8.1
 /// shared build's folder with ffmpeg and ffprobe); without it these do nothing.
 /// </summary>
 public class PictureMeterTests

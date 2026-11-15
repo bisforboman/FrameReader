@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- examples/TapeSplitter against FFmpeg 8.1's own filters on tapes made with lavfi (TapeScanTests.cs). -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <!-- Real source paths (not CI's /_/), so a failed test's annotation points at its file (GitHubActions logger). -->
+    <ContinuousIntegrationBuild>false</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="GitHubActionsTestLogger" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\examples\TapeSplitter\TapeSplitter.csproj" />
+  </ItemGroup>
+
+</Project>

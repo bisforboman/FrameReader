@@ -4,10 +4,12 @@
     <Project Path="src/FrameReader.Native/FrameReader.Native.csproj" />
   </Folder>
   <Folder Name="/examples/">
+    <Project Path="examples/TapeSplitter/TapeSplitter.csproj" />
     <Project Path="examples/ThumbnailApi/ThumbnailApi.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/FrameReader.Tests/FrameReader.Tests.csproj" />
     <Project Path="tests/AudioWithoutFfmpeg/AudioWithoutFfmpeg.csproj" />
+    <Project Path="tests/TapeSplitter.Tests/TapeSplitter.Tests.csproj" />
   </Folder>
 </Solution>

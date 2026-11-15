@@ -5,7 +5,7 @@ using FrameReader;
 
 /// <summary>
 /// AudioReader against ffmpeg's command line: the samples of <c>-vn [-ss T] [-ar R -ac C] -f f32le</c>, byte for byte.
-/// Needs SHOTDETECTOR_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg); without it these do nothing.
+/// Needs FRAMEREADER_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg); without it these do nothing.
 /// </summary>
 public class AudioReaderTests
 {

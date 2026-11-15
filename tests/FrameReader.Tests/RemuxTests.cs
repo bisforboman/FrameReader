@@ -3,7 +3,7 @@ using FrameReader;
 
 /// <summary>
 /// Remux.Copy against ffmpeg's command line: <c>ffmpeg -i IN -map ... -c copy -fflags +bitexact OUT</c>, byte for byte.
-/// Needs SHOTDETECTOR_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg); without it these do nothing.
+/// Needs FRAMEREADER_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg); without it these do nothing.
 /// </summary>
 public class RemuxTests
 {
@@ -84,6 +84,79 @@ public class RemuxTests
         }
     }
 
+    // Start and End: ffmpeg's input -ss and -to with stream copy (the backlog's trimming, issue #23's tape splitter):
+    // keyframe-aligned where there are B-frames and GOPs (H.264, MPEG-2), exact where every frame is a keyframe (DV,
+    // FFV1 with -g 1 and PCM), the MPEG-TS input's start time not 0. -1: not set.
+    [Theory]
+    [InlineData("in.mp4", "-c:v libx264 -g 12 -bf 2 -c:a aac", "cut.mp4", 1300, 2600)]
+    [InlineData("in.mp4", "-c:v libx264 -g 12 -bf 2 -c:a aac", "cut.mkv", 1300, -1)]
+    [InlineData("in.mp4", "-c:v libx264 -g 12 -bf 2 -c:a aac", "head.mp4", -1, 2000)]
+    [InlineData("in.avi", "-c:v dvvideo -s 720x576 -pix_fmt yuv420p -c:a pcm_s16le -ar 48000", "cut.avi", 520, 2200)]
+    [InlineData("in.mkv", "-c:v ffv1 -g 1 -c:a pcm_s16le", "cut.mkv", 1040, 2000)]
+    [InlineData("in.ts", "-c:v mpeg2video -g 12 -bf 2 -c:a mp2", "cut.ts", 700, 2300)]
+    [InlineData("in.ts", "-c:v mpeg2video -g 12 -bf 2 -c:a mp2", "cut.mp4", 700, 2300)]
+    public void TrimIsFfmpegs(string source, string make, string output, int startMs, int endMs)
+    {
+        if (Libs is null)
+            return;
+        string dir = Directory.CreateTempSubdirectory("framereader-remux-").FullName;
+        try
+        {
+            string input = Path.Combine(dir, source), expected = Path.Combine(dir, "expected-" + output), actual = Path.Combine(dir, output);
+            Ffmpeg(["-v", "error", "-y", .. Make.Split(' '), "-map", "0", "-map", "1", .. make.Split(' '), input]);
+            string[] cut = [.. startMs >= 0 ? new[] { "-ss", Seconds(startMs) } : [], .. endMs >= 0 ? new[] { "-to", Seconds(endMs) } : []];
+            Ffmpeg(["-v", "error", "-y", .. cut, "-i", input, "-map", "0", "-c", "copy", "-fflags", "+bitexact", expected]);
+            Remux.Copy(input, actual, new RemuxOptions
+            {
+                Start = startMs >= 0 ? TimeSpan.FromMilliseconds(startMs) : null,
+                End = endMs >= 0 ? TimeSpan.FromMilliseconds(endMs) : null,
+                Bitexact = true,
+            });
+            byte[] want = File.ReadAllBytes(expected), got = File.ReadAllBytes(actual);
+            int first = 0;
+            while (first < Math.Min(want.Length, got.Length) && want[first] == got[first])
+                first++;
+            Assert.True(want.AsSpan().SequenceEqual(got), $"{source} -> {output}: ffmpeg {want.Length} bytes, ours {got.Length}, first difference at {first}");
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+
+        static string Seconds(int ms) => (ms / 1000.0).ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    // Chapters move with Start as ffmpeg moves them: those that end before it are left out, the one it falls in starts at 0.
+    [Fact]
+    public void TrimmedChaptersAreFfmpegs()
+    {
+        if (Libs is null)
+            return;
+        string dir = Directory.CreateTempSubdirectory("framereader-remux-").FullName;
+        try
+        {
+            string meta = Path.Combine(dir, "meta.txt"), input = Path.Combine(dir, "in.mkv"), expected = Path.Combine(dir, "expected.mkv"), actual = Path.Combine(dir, "out.mkv");
+            File.WriteAllText(meta, ";FFMETADATA1\n[CHAPTER]\nTIMEBASE=1/1000\nSTART=0\nEND=1000\ntitle=One\n[CHAPTER]\nTIMEBASE=1/1000\nSTART=1000\nEND=2000\ntitle=Two\n[CHAPTER]\nTIMEBASE=1/1000\nSTART=2000\nEND=3000\ntitle=Three\n");
+            Ffmpeg(["-v", "error", "-y", .. Make.Split(' '), "-i", meta, "-map", "0", "-map", "1", "-map_chapters", "3", "-c:v", "ffv1", "-c:a", "pcm_s16le", input]);
+            Ffmpeg("-v", "error", "-y", "-ss", "1.2", "-to", "2.5", "-i", input, "-map", "0", "-c", "copy", "-fflags", "+bitexact", expected);
+            Remux.Copy(input, actual, new RemuxOptions { Start = TimeSpan.FromMilliseconds(1200), End = TimeSpan.FromMilliseconds(2500), Bitexact = true });
+            Assert.Equal(File.ReadAllBytes(expected), File.ReadAllBytes(actual));
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
+    public void TrimNeedsEndAfterStart()
+    {
+        var never = Path.Combine(Path.GetTempPath(), "framereader-no-such-input.mkv");
+        Assert.Throws<ArgumentException>(() => Remux.Copy(never, "out.mkv", new RemuxOptions { Start = TimeSpan.FromSeconds(-1) }));
+        Assert.Throws<ArgumentException>(() => Remux.Copy(never, "out.mkv", new RemuxOptions { Start = TimeSpan.FromSeconds(2), End = TimeSpan.FromSeconds(2) }));
+        Assert.Throws<ArgumentException>(() => Remux.Copy(never, "out.mkv", new RemuxOptions { End = TimeSpan.Zero }));
+    }
+
     // DisplayRotation: ffmpeg's -display_rotation, with the input's own rotation replaced.
     [Theory]
     [InlineData(90)]
@@ -159,7 +232,7 @@ public class RemuxTests
     }
 
     // CENC (issue #171): FFmpeg's mp4 muxer encrypts, byte for byte ffmpeg's -encryption_* output, for DASH segments and a
-    // plain .mp4. Widevine adds the pssh box (pssh-box.py's; CI checks against it with SHOTDETECTOR_WIDEVINE_PSSH) to each
+    // plain .mp4. Widevine adds the pssh box (pssh-box.py's; CI checks against it with FRAMEREADER_WIDEVINE_PSSH) to each
     // init segment, which is otherwise ffmpeg's, and ContentProtection to the MPD; ffmpeg decrypts it back to the input.
     [Fact]
     public void EncryptedAsFfmpegWithWidevineSignalling()
@@ -200,7 +273,7 @@ public class RemuxTests
 
             // pssh: version 0, Widevine's system ID, WidevinePsshData with the key ID (field 2)
             byte[] pssh = Convert.FromHexString("000000327073736800000000edef8ba979d64acea3c827dcd51d21ed000000121210" + KeyId);
-            if (Environment.GetEnvironmentVariable("SHOTDETECTOR_WIDEVINE_PSSH") is { Length: > 0 } fromPsshBox)
+            if (Environment.GetEnvironmentVariable("FRAMEREADER_WIDEVINE_PSSH") is { Length: > 0 } fromPsshBox)
                 Assert.Equal(Convert.FromBase64String(fromPsshBox.Trim()), pssh);
             foreach (string name in names.Where(n => n.StartsWith("init-", StringComparison.Ordinal)))
             {
@@ -244,10 +317,10 @@ public class RemuxTests
             }
 
             // Issue #185: the DRM provider's WidevinePsshData (here key ID, provider "conax", content_id "content-0001"),
-            // written unchanged: pssh-box.py --widevine-system-id --pssh-data's box (CI: SHOTDETECTOR_WIDEVINE_PSSH_FROM_DATA).
+            // written unchanged: pssh-box.py --widevine-system-id --pssh-data's box (CI: FRAMEREADER_WIDEVINE_PSSH_FROM_DATA).
             byte[] conax = Convert.FromBase64String("EhChssPU5fYHGCk6S1xtfo+QGgVjb25heCIMY29udGVudC0wMDAx");
             byte[] conaxBox = Convert.FromBase64String("AAAAR3Bzc2gAAAAA7e+LqXnWSs6jyCfc1R0h7QAAACcSEKGyw9Tl9gcYKTpLXG1+j5AaBWNvbmF4Igxjb250ZW50LTAwMDE=");
-            if (Environment.GetEnvironmentVariable("SHOTDETECTOR_WIDEVINE_PSSH_FROM_DATA") is { Length: > 0 } fromData)
+            if (Environment.GetEnvironmentVariable("FRAMEREADER_WIDEVINE_PSSH_FROM_DATA") is { Length: > 0 } fromData)
                 Assert.Equal(Convert.FromBase64String(fromData.Trim()), conaxBox);
             string given = Directory.CreateDirectory(Path.Combine(dir, "given")).FullName;
             Remux.Copy(input, Path.Combine(given, "manifest.mpd"), new RemuxOptions

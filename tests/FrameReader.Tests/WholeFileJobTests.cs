@@ -1,7 +1,7 @@
 using FrameReader;
 
 /// <summary>
-/// The whole-file jobs' progress (issue #242) and async overloads (issue #243). Needs SHOTDETECTOR_FFMPEG_LIBS; without
+/// The whole-file jobs' progress (issue #242) and async overloads (issue #243). Needs FRAMEREADER_FFMPEG_LIBS; without
 /// it these do nothing.
 /// </summary>
 public class WholeFileJobTests

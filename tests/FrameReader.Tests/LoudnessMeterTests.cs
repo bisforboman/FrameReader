@@ -9,7 +9,7 @@ using FrameReader;
 /// BS.1770-4 Annex 2's, not ebur128's (docs/decisions/2026-10-31-frame-reader-measures.md): within 0.05 dB of an ideal
 /// reconstruction (tools/true_peak_reference.py on the same clips, the numbers below) and, on audio without energy near
 /// Nyquist, within 0.1 dB of ebur128's. The highest momentary and short-term loudness are the highest M and S its
-/// framelog prints every 100 ms once their window is full (to one decimal: within 0.05 LU). Needs SHOTDETECTOR_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg);
+/// framelog prints every 100 ms once their window is full (to one decimal: within 0.05 LU). Needs FRAMEREADER_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg);
 /// without it these do nothing.
 /// </summary>
 public class LoudnessMeterTests

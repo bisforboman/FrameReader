@@ -6,7 +6,7 @@ using FrameReader;
 /// <summary>
 /// AudioReader skips the streams it doesn't decode (<c>AVDISCARD_ALL</c>, as ffmpeg's <c>-vn</c>): the same samples,
 /// chunk times and positions as reading every stream, and ffmpeg's, from the start and after seeks, in containers that
-/// skip the bytes (MP4, MXF) and ones that parse them anyway (MPEG-TS, Matroska). Needs SHOTDETECTOR_FFMPEG_LIBS (an
+/// skip the bytes (MP4, MXF) and ones that parse them anyway (MPEG-TS, Matroska). Needs FRAMEREADER_FFMPEG_LIBS (an
 /// FFmpeg 8.1 shared build's folder with ffmpeg); without it these do nothing.
 /// </summary>
 public class AudioDiscardTests

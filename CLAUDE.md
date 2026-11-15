@@ -76,9 +76,9 @@ released, and a breaking change is a major version.
 
 - Cloud sessions: `.claude/hooks/session-start.sh` installs the .NET 10 SDK if missing, restores the tool and the
   solution, sets `core.hooksPath`, and puts BtbN's pinned FFmpeg 8.1 gpl-shared (in `~/.cache/framereader`) on PATH
-  and in `SHOTDETECTOR_FFMPEG_LIBS`.
+  and in `FRAMEREADER_FFMPEG_LIBS`.
 - `dotnet test FrameReader.slnx` (~5 min). One class: `--filter "FullyQualifiedName~SeekTests"`.
-- `SHOTDETECTOR_FFMPEG_LIBS` (the name from ShotDetector's repository): a folder of FFmpeg 8.1's shared libraries;
+- `FRAMEREADER_FFMPEG_LIBS`: a folder of FFmpeg 8.1's shared libraries;
   without it the in-process tests pass without checking. Our build: a ci.yml or native.yml run's `native-linux-x64`
   artifact, or BtbN's `gpl-shared` 8.1 archive from the release pinned in `.github/actions/btbn-ffmpeg/action.yml`.
 - The VideoWriter tests against x264 need `DOTNET_TieredCompilation=0` on AVX-512 CPUs (src/FrameReader/CLAUDE.md).
@@ -88,7 +88,9 @@ released, and a breaking change is a major version.
 - `src/FrameReader`: the library. `src/FrameReader.Native`: the native packages (`dotnet pack -p:Rid=<rid>` from
   `native/<rid>/`).
 - `tests/FrameReader.Tests`: xunit. `tests/AudioWithoutFfmpeg`: a process of its own that fails if the audio measures
-  on samples load anything of FFmpeg.
+  on samples load anything of FFmpeg. `tests/TapeSplitter.Tests`: examples/TapeSplitter against ffmpeg's filters.
+- `examples/`: `ThumbnailApi` (ASP.NET Core) and `TapeSplitter` (console), on FrameReader's source; in the solution, so CI
+  builds, formats and tests them.
 - `benchmarks/FrameReader.Benchmarks`: against FFMpegCore and the ffmpeg executable (frame-reader-bench.yml).
 - `tools/`: `native/build-ffmpeg.sh`, `changelog.py`, `media.py` (pinned real-world media), `nightly-issue.sh`,
   `vulnerable-packages.py`, `true_peak_reference.py` (LoudnessMeterTests' reference true peaks).

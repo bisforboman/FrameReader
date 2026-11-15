@@ -6,7 +6,7 @@ using FrameReader;
 /// frame with its tags (<c>-f rawvideo -pixel_format F -video_size WxH -i frame.raw -vf setparams=...,setsar=...
 /// -frames:v 1 out.jpg</c>, and its options; WebP with <c>-c:v libwebp</c>, as a build with libwebp_anim picks that one),
 /// byte for byte with the same libraries; the tags are ffmpeg's frame's after the reader's filters (showinfo). Needs
-/// SHOTDETECTOR_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg, which has mjpeg, png and libwebp); without
+/// FRAMEREADER_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg, which has mjpeg, png and libwebp); without
 /// it these do nothing.
 /// </summary>
 public class ImageEncoderTests
@@ -43,14 +43,14 @@ public class ImageEncoderTests
     /// <summary>
     /// Whether the byte comparisons can run: the libraries have the encoders and the ffmpeg executable beside them is
     /// their own build (the same configuration: CI's main job puts BtbN's static executable beside our libraries, whose
-    /// zlib and encoders needn't write the same bytes). With SHOTDETECTOR_REQUIRE_SAME_BUILD=1 (CI's step with BtbN's
+    /// zlib and encoders needn't write the same bytes). With FRAMEREADER_REQUIRE_SAME_BUILD=1 (CI's step with BtbN's
     /// shared build) not being able to is a failure, not a skip.
     /// </summary>
     static bool CanCompare()
     {
         bool can = Usable(ImageFormat.Jpg) && Usable(ImageFormat.Png) && Usable(ImageFormat.WebP) && SameBuild();
-        if (!can && Environment.GetEnvironmentVariable("SHOTDETECTOR_REQUIRE_SAME_BUILD") == "1")
-            Assert.Fail($"SHOTDETECTOR_REQUIRE_SAME_BUILD is set, but {Libs} lacks mjpeg, png or libwebp, or its ffmpeg isn't the libraries' own build.");
+        if (!can && Environment.GetEnvironmentVariable("FRAMEREADER_REQUIRE_SAME_BUILD") == "1")
+            Assert.Fail($"FRAMEREADER_REQUIRE_SAME_BUILD is set, but {Libs} lacks mjpeg, png or libwebp, or its ffmpeg isn't the libraries' own build.");
         return can;
     }
 

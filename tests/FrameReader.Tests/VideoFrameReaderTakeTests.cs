@@ -7,7 +7,7 @@ using FrameReader;
 /// VideoFrameReader's TryTake methods (issue #574): the decoder's own frames, unconverted, at exactly the positions the
 /// reads find (keyframe jumps, the ffmpeg-like seek, ReadAhead's queue, deinterlacing, autorotation); reads and takes
 /// mixed on one reader; frames the caller owns, valid after the next read and after the reader. Needs
-/// SHOTDETECTOR_FFMPEG_LIBS; without it these do nothing.
+/// FRAMEREADER_FFMPEG_LIBS; without it these do nothing.
 /// </summary>
 public class VideoFrameReaderTakeTests
 {

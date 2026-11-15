@@ -5,7 +5,7 @@ using FrameReader;
 /// <summary>
 /// FrameDecoder's rotation (ffmpeg's autorotate: transpose, hflip, vflip): its vector moves against a plain loop at
 /// every small size, and its frames against ffmpeg's command line for every display rotation and flip, at odd sizes
-/// and both sample sizes. The ffmpeg half needs SHOTDETECTOR_FFMPEG_LIBS.
+/// and both sample sizes. The ffmpeg half needs FRAMEREADER_FFMPEG_LIBS.
 /// </summary>
 public class RotationTests
 {

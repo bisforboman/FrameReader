@@ -2,7 +2,7 @@ using System.Diagnostics;
 using FrameReader;
 
 /// <summary>
-/// WaveformData against BBC's audiowaveform: the same .dat bytes. Needs SHOTDETECTOR_FFMPEG_LIBS (an FFmpeg 8.1 shared
+/// WaveformData against BBC's audiowaveform: the same .dat bytes. Needs FRAMEREADER_FFMPEG_LIBS (an FFmpeg 8.1 shared
 /// build's folder with ffmpeg); the comparison also AUDIOWAVEFORM (the audiowaveform executable; CI installs it).
 /// Without them these do nothing.
 /// </summary>

@@ -22,7 +22,7 @@ public class AudioAnalyses
     [GlobalSetup]
     public void Setup()
     {
-        FFmpegLibraries.Load(Environment.GetEnvironmentVariable("SHOTDETECTOR_FFMPEG_LIBS"));
+        FFmpegLibraries.Load(Environment.GetEnvironmentVariable("FRAMEREADER_FFMPEG_LIBS"));
         _video = ReadFrames.Videos().First();
     }
 

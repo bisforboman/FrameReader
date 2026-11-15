@@ -4,7 +4,7 @@ using FrameReader;
 /// <summary>
 /// Audio.Convert against ffmpeg's command line (issue #192): <c>ffmpeg -i IN -vn [-af G] [-c:a E] [-b:a B] -fflags
 /// +bitexact -flags:a +bitexact OUT</c>, byte for byte, including the conversion ffmpeg inserts to what the encoder
-/// takes. Needs SHOTDETECTOR_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg); without it these do nothing.
+/// takes. Needs FRAMEREADER_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg); without it these do nothing.
 /// </summary>
 public class AudioConvertTests
 {

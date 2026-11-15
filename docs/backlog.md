@@ -23,20 +23,12 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
   - Why: only Linux (x64, ARM, musl) runs the tests here; the Windows struct-layout gotcha (src/FrameReader/CLAUDE.md) shows platform-only bugs exist
   - Status: Open
 
-- Rename the test environment variables from `SHOTDETECTOR_*` to `FRAMEREADER_*` (FFMPEG_LIBS, REQUIRE_X264, REQUIRE_SAME_BUILD, KEEP_DIFFERING, WIDEVINE_PSSH*, REALWORLD_AUDIO)
-  - Why: names from ShotDetector's repository; kept for the move so nothing else changed. Rename in the tests, the workflows, the session-start hook and CLAUDE.md in one PR
-  - Status: Open
-
 - The approximate speed options in the README: `CodecOptions` `skip_loop_filter` = `all` (ffmpeg's `-skip_loop_filter all` before `-i`) next to `FrameDecoderOptions`' keyframes only, with a test that the frames equal ffmpeg's with the same option
   - Why: `CodecOptions` already passes any decoder option, so analysis that can take a slightly different picture (motion, cuts, thumbnails) can decode H.264 and HEVC faster today, but nothing says so; a test keeps it the same as the command line, as the rest is
   - Status: Open
 
 - Wider output formats: `Gray16`, `Rgb48` and planar 32-bit float RGB (ffmpeg's `format=gray16le`, `rgb48le`, `gbrpf32le`) as `FrameFormat`s, checked byte for byte against `-f rawvideo`
   - Why: every `FrameFormat` is 8-bit, so a 10-bit ProRes or HDR source loses its low bits before the caller sees it, and ML input (the library's design doc names it) converts each 8-bit frame to float again in managed code
-  - Status: Open
-
-- Trimming with stream copy: `Remux.Copy` with a start and an end, as ffmpeg's `-ss S -to E -i in -c copy` (keyframe-aligned start as there), checked against ffmpeg's output packet for packet
-  - Why: the one FFMpegCore job (`FFMpeg.SubVideo`) FrameReader lacks; docs/coming-from-ffmpegcore.md says "not yet" (#11)
   - Status: Open
 
 - A read-once Stream of a moov-last MP4: fail with `FrameReaderException` (`InvalidInput`) where ffmpeg fails, instead of giving no frames
@@ -62,6 +54,18 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
   - Status: Waiting (on the owner)
 
 ## Maybe
+
+- The raw `dv` muxer in the native build, so `Remux.Copy` writes .dv files with FrameReader.Native
+  - Why: the build enables only the muxers FrameReader uses (tools/native/build-ffmpeg.sh), and `dv` isn't one, so the tape splitter writes a .dv capture's recordings as AVI or Matroska (`--as`; found by PR #26's arm job). An edit to the script rebuilds every platform's FFmpeg, so it waits for a change that needs a rebuild anyway
+  - Status: Maybe
+
+- The tape splitter: a measure for analogue noise ("snow"), so a tape's unrecorded stretches count as gaps
+  - Why: a VHS tape's unrecorded stretches show noise, not black or blue, and none of the detectors finds it (issue #23). No FFmpeg filter names it, so it would be FrameReader's own figure, outside the promise that every figure is checked against ffmpeg: the owner decides whether to make one (docs/decisions/2026-11-09-tape-splitter-example.md)
+  - Status: Maybe
+
+- The tape splitter: cut points for recordings that start with no gap (a hard cut), and the rules from spans to cut points (how long a blank counts, whether picture and sound must agree, the thresholds)
+  - Why: the first slice cuts only at blank stretches the picture shows, silence reported beside them. A recording that starts straight after another needs a cut detector (ShotDetector's territory) or DV's recording date where the stream has it (dvrescue's dvpackager splits DV that way) (issue #23)
+  - Status: Maybe
 
 - Segment decoders inside `ReadAhead`: several decoders on different parts of the file
   - Why: ffmpeg caps frame threads at 16, so above that cores sit idle; issue #566's own run with 4 `ReadAt` readers shows the gain. Pays only above ~16 cores

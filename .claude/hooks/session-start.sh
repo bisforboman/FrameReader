@@ -1,7 +1,7 @@
 #!/bin/bash
 # Cloud sessions only: the .NET 10 SDK, the local tool (bro), the restored solution, the pre-commit hook, and BtbN's
 # FFmpeg 8.1 gpl-shared build (the release and SHA-256 pinned in .github/actions/btbn-ffmpeg), unpacked once into
-# ~/.cache/framereader, its bin folder (executables and libraries) first on PATH and as SHOTDETECTOR_FFMPEG_LIBS.
+# ~/.cache/framereader, its bin folder (executables and libraries) first on PATH and as FRAMEREADER_FFMPEG_LIBS.
 # Idempotent: the container is cached after it runs, so a later start finds everything in place and only checks.
 # An optional step that fails says so and the session starts anyway.
 set -uo pipefail
@@ -34,7 +34,7 @@ sum=$(sed -n "s/^ *$name) sum=\([0-9a-f]*\) ;;\$/\1/p" "$action")
 dir="$HOME/.cache/framereader/btbn-$name"
 bin="$dir/$name/bin"
 if [ -z "$release" ] || [ -z "$tag" ] || [ -z "$sum" ]; then
-  echo "session-start: no FFmpeg 8.1 pin found in $action; set SHOTDETECTOR_FFMPEG_LIBS by hand (CLAUDE.md)."
+  echo "session-start: no FFmpeg 8.1 pin found in $action; set FRAMEREADER_FFMPEG_LIBS by hand (CLAUDE.md)."
 elif [ ! -x "$bin/ffmpeg" ]; then
   archive="$HOME/.cache/framereader/$name.tar.xz"
   mkdir -p "$HOME/.cache/framereader"
@@ -50,8 +50,8 @@ elif [ ! -x "$bin/ffmpeg" ]; then
 fi
 if [ -x "$bin/ffmpeg" ]; then
   export PATH="$bin:$PATH"
-  env_lines+=("export PATH=\"$bin:\$PATH\"" "export SHOTDETECTOR_FFMPEG_LIBS=\"$bin\"")
-  echo "session-start: $(ffmpeg -hide_banner -version | head -1) on PATH and as SHOTDETECTOR_FFMPEG_LIBS."
+  env_lines+=("export PATH=\"$bin:\$PATH\"" "export FRAMEREADER_FFMPEG_LIBS=\"$bin\"")
+  echo "session-start: $(ffmpeg -hide_banner -version | head -1) on PATH and as FRAMEREADER_FFMPEG_LIBS."
 fi
 
 if [ -n "${CLAUDE_ENV_FILE:-}" ]; then

@@ -2,7 +2,7 @@ using FrameReader;
 
 /// <summary>
 /// Remux.CanCopy (issue #241): FFmpeg's own answer to "can these streams be stream-copied there", per stream, without
-/// writing anything. Needs SHOTDETECTOR_FFMPEG_LIBS; without it these do nothing.
+/// writing anything. Needs FRAMEREADER_FFMPEG_LIBS; without it these do nothing.
 /// </summary>
 public class RemuxCanCopyTests
 {

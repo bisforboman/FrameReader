@@ -362,6 +362,16 @@ Remux.Copy("film.mkv", "web.mp4", new() { MuxerOptions = new Dictionary<string, 
 Remux.Copy("phone.mp4", "upright.mp4", new() { DisplayRotation = 90 });  // ffmpeg's -display_rotation 90
 ```
 
+Trimming: `Start` and `End` are ffmpeg's input `-ss` and `-to` (`ffmpeg -ss S -to E -i IN -c copy OUT`, the same
+file). The copy starts at the keyframe at or before `Start`: exact where every frame is a keyframe (DV, MJPEG, FFV1
+with `-g 1`, PCM), from the keyframe before for H.264, HEVC and MPEG-2, whose frames before `Start` get negative
+timestamps (an .mp4 hides them with an edit list). Each stream ends at its first packet at or after `End`. Both count
+from the input's start time, `MediaProbe.Probe(path).StartTime` (0 but for MPEG-TS and the like):
+
+```csharp
+Remux.Copy("tape.dv", "wedding.dv", new() { Start = TimeSpan.FromSeconds(754.2), End = TimeSpan.FromSeconds(3121) });
+```
+
 `MuxerOptions` are ffmpeg's output options without the dash. With the `dash` muxer they give MPEG-DASH: fMP4 init and
 media segments and a static MPD, the files `ffmpeg -c copy -f dash` writes with the same options (separate audio and
 video adaptation sets here; segments are written next to the .mpd):
@@ -636,7 +646,7 @@ trim and the encoders (mpeg2video, mpeg4, png, aac, PCM), and write program stre
 and a concat, not byte for byte.
 
 `MediaProbe.Probe(path or Stream)` reads a file's properties without decoding (codec, size, pixel format, colour
-tags, field order, frame rates, time base, duration, frame count, rotation, container, audio, and `Streams`: every
+tags, field order, frame rates, time base, duration, frame count, rotation, container, start time, audio, and `Streams`: every
 stream with its type, codec, codec tag, language, title, flags, bit rate, duration and audio details; the video's
 codec extradata; optionally every video packet's pts, dts, size and position, its keyframe flag, and the first video
 packet's bytes). A local MP4/MOV file's packet timestamps and sizes come from its sample tables without reading its media data (h264, HEVC, MPEG-2/4, MJPEG and ProRes video;

@@ -4,7 +4,7 @@ using FrameReader;
 
 /// <summary>
 /// MediaProbe.ProbeJson against ffprobe's <c>-print_format json -show_format -show_streams</c> (issue #193): the same
-/// keys and values, types included. Needs SHOTDETECTOR_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg and
+/// keys and values, types included. Needs FRAMEREADER_FFMPEG_LIBS (an FFmpeg 8.1 shared build's folder with ffmpeg and
 /// ffprobe); without it these do nothing.
 /// </summary>
 public class ProbeJsonTests

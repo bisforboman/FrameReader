@@ -5,7 +5,7 @@ using FrameReader;
 
 /// <summary>
 /// VideoWriter against ffmpeg's command line: the same raw frames (and samples) in, the same file out, byte for byte,
-/// bitexact on both sides. Needs SHOTDETECTOR_FFMPEG_LIBS (an FFmpeg 8.1 build with libx264 and its ffmpeg, the same
+/// bitexact on both sides. Needs FRAMEREADER_FFMPEG_LIBS (an FFmpeg 8.1 build with libx264 and its ffmpeg, the same
 /// build: x264's output depends on how it was compiled); without libx264 there, these do nothing.
 /// </summary>
 public class VideoWriterTests
@@ -27,14 +27,14 @@ public class VideoWriterTests
     }
 
     /// <summary>
-    /// Whether libx264 is there and the ffmpeg executable is the libraries' own build. With SHOTDETECTOR_REQUIRE_X264=1
+    /// Whether libx264 is there and the ffmpeg executable is the libraries' own build. With FRAMEREADER_REQUIRE_X264=1
     /// (CI's x264 step) not being able to is a failure, not a skip.
     /// </summary>
     static bool CanCompare()
     {
         bool can = Compares();
-        if (!can && Environment.GetEnvironmentVariable("SHOTDETECTOR_REQUIRE_X264") == "1")
-            Assert.Fail($"SHOTDETECTOR_REQUIRE_X264 is set, but {Libs} has no libx264 or its ffmpeg isn't the libraries' own build.");
+        if (!can && Environment.GetEnvironmentVariable("FRAMEREADER_REQUIRE_X264") == "1")
+            Assert.Fail($"FRAMEREADER_REQUIRE_X264 is set, but {Libs} has no libx264 or its ffmpeg isn't the libraries' own build.");
         return can;
     }
 
@@ -146,7 +146,7 @@ public class VideoWriterTests
             int first = 0;
             while (first < Math.Min(want.Length, got.Length) && want[first] == got[first])
                 first++;
-            if (!want.AsSpan().SequenceEqual(got) && Environment.GetEnvironmentVariable("SHOTDETECTOR_KEEP_DIFFERING") is { Length: > 0 } keep)
+            if (!want.AsSpan().SequenceEqual(got) && Environment.GetEnvironmentVariable("FRAMEREADER_KEEP_DIFFERING") is { Length: > 0 } keep)
             {
                 File.Copy(expected, Path.Combine(keep, "ffmpeg-" + name), true);
                 File.Copy(actual, Path.Combine(keep, "ours-" + name), true);
@@ -188,7 +188,7 @@ public class VideoWriterTests
     /// <summary>
     /// Writes with whatever libraries these are (no ffmpeg executable of their own build needed to compare with) and
     /// reads the frames back: every input layout through the graph to the encoder's format.
-    /// With SHOTDETECTOR_REQUIRE_X264=1 libraries without libx264 fail.
+    /// With FRAMEREADER_REQUIRE_X264=1 libraries without libx264 fail.
     /// </summary>
     [Theory]
     [InlineData(FrameFormat.Bgr24, null)]
@@ -199,7 +199,7 @@ public class VideoWriterTests
     {
         if (!HasX264())
         {
-            Assert.False(Environment.GetEnvironmentVariable("SHOTDETECTOR_REQUIRE_X264") == "1", $"SHOTDETECTOR_REQUIRE_X264 is set, but {Libs} has no libx264.");
+            Assert.False(Environment.GetEnvironmentVariable("FRAMEREADER_REQUIRE_X264") == "1", $"FRAMEREADER_REQUIRE_X264 is set, but {Libs} has no libx264.");
             return;
         }
 

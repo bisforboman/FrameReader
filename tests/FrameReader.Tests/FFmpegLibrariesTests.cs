@@ -1,12 +1,12 @@
 using FrameReader;
 
 /// <summary>
-/// Loading FFmpeg's libraries. SHOTDETECTOR_FFMPEG_LIBS names an FFmpeg 8.1 shared build's folder (CI sets it); without
+/// Loading FFmpeg's libraries. FRAMEREADER_FFMPEG_LIBS names an FFmpeg 8.1 shared build's folder (CI sets it); without
 /// it the tests that need the libraries do nothing. Loading is once per process, so the failure case runs first.
 /// </summary>
 public class FFmpegLibrariesTests
 {
-    static readonly string? Libs = Environment.GetEnvironmentVariable("SHOTDETECTOR_FFMPEG_LIBS");
+    static readonly string? Libs = Environment.GetEnvironmentVariable("FRAMEREADER_FFMPEG_LIBS");
 
     [Fact]
     public void LoadsOnceAndReportsWhatItHas()

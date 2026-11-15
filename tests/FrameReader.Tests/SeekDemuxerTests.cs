@@ -7,7 +7,7 @@ using FrameReader;
 /// marks every PES with a dts as a keyframe; AVI with B-frames, where ffmpeg's -ss margin goes before the first index
 /// entry; MP4 with MPEG-4 Part 2 B-frames, indexed by dts; FLV, whose seeks near the start fail; raw elementary streams
 /// (.m2v, .m4v, .h264, .hevc), which have no timestamps at all. With ReadAhead 0 and 2, skipping unreferenced frames as
-/// by default. Needs SHOTDETECTOR_FFMPEG_LIBS (with an ffmpeg that has libxvid, libx264 and libx265); without it these do
+/// by default. Needs FRAMEREADER_FFMPEG_LIBS (with an ffmpeg that has libxvid, libx264 and libx265); without it these do
 /// nothing, and formats whose demuxer or decoder the libraries lack are left out. The byte comparisons with ffmpeg's own
 /// frames run when the ffmpeg executable is the libraries' own build; the full decode's frames are compared in every run.
 /// </summary>
