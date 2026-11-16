@@ -29,4 +29,5 @@ Found on the way: FFV1 is intra-only only with `-g 1` (by default a keyframe eve
 reusing the coder's state), so a cut of a default FFV1 capture starts up to 11 frames early, as ffmpeg's does. Archives
 encode FFV1 with `-g 1`; the docs say so.
 
-The noise measure and the rules from spans to cut points stay Maybe rows in docs/backlog.md.
+The noise measure and the rules from spans to cut points stay Maybe rows in docs/backlog.md (the rules since built:
+[2026-11-15-tape-splitter-cut-rules.md](2026-11-15-tape-splitter-cut-rules.md)).
