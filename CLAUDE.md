@@ -51,7 +51,7 @@ released, and a breaking change is a major version.
   the same time each use their own worktree.
 - **Changelog**: a PR with a change users of the packages notice adds `changes/framereader/<branch>.md`
   (changes/README.md), never the CHANGELOG itself.
-- **Backlog**: docs/backlog.md (the `backlog` skill previews and extends it); set a row's status when work starts; when it is Done (Dropped, Won't do) move it to the
+- **Backlog**: docs/backlog.md (the `backlog` skill previews and extends it; the `ideas` skill surveys the library for new directions); set a row's status when work starts; when it is Done (Dropped, Won't do) move it to the
   end of docs/backlog-done.md. Add items when something turns up, with why.
 - **Asking the owner**: whenever you need input (a choice, an approval, whether to go on), ask with the
   multiple-choice prompt (AskUserQuestion), not at the end of a reply. Record a design decision's question, choices
