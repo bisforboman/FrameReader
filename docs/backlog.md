@@ -31,12 +31,48 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
   - Why: every `FrameFormat` is 8-bit, so a 10-bit ProRes or HDR source loses its low bits before the caller sees it, and ML input (the library's design doc names it) converts each 8-bit frame to float again in managed code
   - Status: Open
 
+- ML input: a read that fills a caller's float tensor (planar RGB, NCHW, with a mean and scale per channel) on top of the planar float format above, and an example that feeds frames to ONNX Runtime and `AudioReader`'s 16 kHz mono to a speech model
+  - Why: a model wants normalised planar floats, so every caller writes the same loop over a `Bgr24` frame; the planar float row gives the samples, this gives the shape models take and shows it working. The normalisation is FrameReader's own arithmetic, so it is checked against the float format's bytes, which are ffmpeg's (the owner chose it, 2026-11-21)
+  - Status: Open (after the wider output formats)
+
 - A read-once Stream of a moov-last MP4: fail with `FrameReaderException` (`InvalidInput`) where ffmpeg fails, instead of giving no frames
   - Why: since #11 a seekable Stream opens it, but one that can't seek (a network or request stream) still ends without a frame and without an error once the mdat is past the 64 KB buffer, where `ffmpeg -i -` fails (`partial file`, then no stream to read); a silent empty read looks like an empty video
   - Status: Open
 
 - `FrameDecoder.CanReadAgain` for seekable Streams
   - Why: it's false for every Stream (`_io == null`), so `VideoFrameReader`'s look-ahead (`TryReadForwardTo`, `ReadAt`) skips ahead less on a FileStream or MemoryStream than on the same file's path, though since #11 such a stream seeks as the file does; needs the look-ahead's tests run on a seekable Stream too
+  - Status: Open
+
+- Video filter graphs on the reader: a `Filter` option on `VideoFrameReaderOptions` (any `-vf` chain before the scale and format), the frames `ffmpeg -vf GRAPH,scale=W:H:flags=bicubic,format=F -f rawvideo` gives, byte for byte, with crop, pad, overlay, thumbnail and tile in the native build
+  - Why: `AudioFilter` runs any `-af` graph, but video gets only `fps`, `yadif` and `scale`: a crop, a letterbox or a contact sheet (`tile`) means managed code of the caller's own, or the ffmpeg executable. `ImageFilterOptions.Filter` already runs a chain for one image, so the graph code is there. The filters are an edit to tools/native/build-ffmpeg.sh, which rebuilds every platform's FFmpeg: one rebuild with the HLS, HDR, encoder and platform rows below (the owner chose it, 2026-11-21)
+  - Status: Open
+
+- Subtitles: a `SubtitleReader` that reads a subtitle stream's cues (start, end, text, and the ASS line as FFmpeg's decoder gives it), and a conversion in one call, the file `ffmpeg -i IN -map 0:s:N OUT.vtt` (or .srt, .ass) writes
+  - Why: the native build has the srt, webvtt and ass muxers and `MediaProbe` lists subtitle streams, but nothing reads one: `Remux.Copy` can only copy it where the container takes its codec. Captions for a player (WebVTT from an mkv's SubRip or ASS, or an mp4's mov_text) are a common job beside thumbnails and DASH (the owner chose it, 2026-11-21)
+  - Status: Open
+
+- HDR to SDR: zimg in the native build, with the `zscale` and `tonemap` filters, and a `VideoFrameReaderOptions` option that tone-maps as `-vf zscale=t=linear,tonemap=...,zscale=t=bt709` does; first a test of what an HDR source gives today
+  - Why: HDR (PQ, HLG) phone and streaming video converted to Bgr24 probably reads washed out today (not checked): swscale doesn't tone-map, and the build has only `scale` among the video filters, so a thumbnail of a phone's video is the first thing a new user sees wrong. zimg is a new linked library (its licence in THIRD-PARTY-NOTICES.md), and any edit to tools/native/build-ffmpeg.sh rebuilds every platform's FFmpeg: one rebuild with the filter, HLS, encoder and platform rows. Was a Maybe; the owner moved it here, 2026-11-21
+  - Status: Open
+
+- Quality metrics: PSNR and SSIM between two runs of frames, without FFmpeg, on planes from any decoder as `PictureMeter` takes them, each frame's and the run's figures those of ffmpeg's `psnr` and `ssim` filters; VMAF after them, if at all
+  - Why: checking an encode against its source is the QC job the meters don't cover yet, and today it needs the ffmpeg executable and its log parsed. Both filters are integer sums and a little floating point, so the same figures are reachable as with signalstats and idet. VMAF needs libvmaf and its models (a new linked library, or a port): a question for the owner once the two are in (the owner chose it, 2026-11-21)
+  - Status: Open
+
+- HLS output: `Remux.Copy` to an .m3u8 with the `hls` muxer (fMP4 or MPEG-TS segments and the playlist), the files `ffmpeg -c copy -f hls` writes with the same options, with `Encryption` where the muxer has it
+  - Why: `Remux.Copy` writes MPEG-DASH with CENC, but Apple's players take only HLS, so a service packaging for the web needs another tool for half its output. The native build has the hls protocol and demuxer but not the muxer: an edit to tools/native/build-ffmpeg.sh, one rebuild with the filter, HDR, encoder and platform rows (the owner chose it, 2026-11-21)
+  - Status: Open
+
+- A video encoder in FrameReader.Native that needs no GPL build: SVT-AV1 or libvpx (BSD), or OpenH264 (Cisco's binary; docs/encoding-package.md has its size and quality), with `VideoWriter` and `Video.Transcode` taking it, the file ffmpeg writes with the same encoder
+  - Why: `VideoWriter` and `Video.Transcode` need libx264 from a GPL build the user brings, so with the packages alone writing video gives only `mpeg4`; it is the largest gap against FFMpegCore, which drives a full ffmpeg. Which encoder is the owner's choice (licence, patents, size, speed: ask before starting, and record it in docs/decisions/); a new linked library in THIRD-PARTY-NOTICES.md and the SBOM, and one rebuild with the filter, HLS, HDR and platform rows (the owner chose the row, 2026-11-21)
+  - Status: Open (the encoder to be decided)
+
+- More platforms: FrameReader.Native.win-arm64 and FrameReader.Native.osx-x64
+  - Why: native.yml builds win-x64, linux-x64, linux-arm64, linux-musl-x64 and osx-arm64, so on a Windows ARM laptop or an Intel Mac the package finds no libraries and the user builds FFmpeg themselves. Two more jobs in native.yml (win-arm64 cross-compiled with llvm-mingw, osx-x64 on a macOS runner with `-arch x86_64`), the meta-package and release.yml; an edit to native.yml rebuilds every platform, so with the rows above. Tests there depend on the Windows and macOS row (the owner chose it, 2026-11-21)
+  - Status: Open
+
+- A cookbook: the README split into task pages under docs/ (thumbnails and contact sheets, QC measures, packaging for DASH, audio analysis, writing), the README kept as a short front page that links them
+  - Why: src/FrameReader/README.md is nuget.org's front page and one page of some 750 lines, in which a reader looking for one job reads past every other; pages by task are found by search and can be linked from an answer. Its measured figures go at the same time (no benchmark numbers in docs: link frame-reader-bench.yml's runs) (the owner chose it, 2026-11-21)
   - Status: Open
 
 ## Waiting
@@ -121,10 +157,6 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
 
 - The native build with link-time optimisation (`--enable-lto`, and for zlib, dav1d, LAME and libwebp)
   - Why: may shave a little off FFmpeg's C code (its hot loops are assembly already); not measured. Any edit to tools/native/build-ffmpeg.sh rebuilds every platform's FFmpeg, so it waits for a rebuild that's needed anyway, as the SBOM row does, and needs its own before-and-after run of frame-reader-bench.yml (docs/decisions/2026-11-07-performance-work.md)
-  - Status: Maybe
-
-- HDR to SDR: zimg in the native build, with the `zscale` and `tonemap` filters, and a `VideoFrameReaderOptions` option that tone-maps as `-vf zscale=t=linear,tonemap=...,zscale=t=bt709` does
-  - Why: HDR (PQ, HLG) phone and streaming video converted to Bgr24 probably reads washed out today (not checked): swscale doesn't tone-map, and the build has only `scale` among the video filters. zimg is a new linked library (its licence in THIRD-PARTY-NOTICES.md), and any edit to tools/native/build-ffmpeg.sh rebuilds every platform's FFmpeg, so it waits for a rebuild that's needed anyway, as the SBOM row does
   - Status: Maybe
 
 - A performance check on pull requests: a short ReadPaths run timed against `ffmpeg -f null` in the same job, as an annotation when the ratio worsens, not a failing check
