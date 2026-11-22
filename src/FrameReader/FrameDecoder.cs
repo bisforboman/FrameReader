@@ -4,6 +4,8 @@ using FFmpeg.AutoGen;
 
 namespace FrameReader;
 
+// Temporary: shows the shotdetector job required on a decoding change (reverted before merge).
+
 /// <summary>
 /// Decodes a video's first video stream with FFmpeg's libraries in this process (FFmpeg.AutoGen bindings, FFmpeg 8.1
 /// ABI), frame by frame as ffmpeg's command line does: the same decoder and timestamps, yadif deinterlacing (FFmpeg's
