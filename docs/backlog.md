@@ -55,7 +55,7 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
 
 - The tape splitter: .dv recordings from a .dv capture with FrameReader.Native, once a release carries its `dv` muxer
   - Why: the native build has the raw `dv` muxer since the rebuild with zlib 1.4 (#22), but examples/TapeSplitter's README, `TapeScan`'s doc comment and its test still say it has none and send a .dv capture's recordings into AVI (`--as avi`). Say .dv works, and test `--write` of a DV capture as .dv against ffmpeg's files. Left out of #22 because issue #23's session was editing the splitter then
-  - Status: Open
+  - Status: Waiting (on the next release, which carries the `dv` muxer)
 
 ## Maybe
 
@@ -85,6 +85,10 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
 
 - ReadAhead's handoff: pulse only when the other side waits, spin briefly before `Monitor.Wait`
   - Why: each frame takes the lock twice and pulses both sides with no waiter, a context switch per frame at depths 1 and 2; microseconds a frame (docs/decisions/2026-11-07-performance-work.md)
+  - Status: Maybe
+
+- ReadAhead's convert-ahead with `FrameRate`: the decoding thread runs the fps filter and converts its frames too
+  - Why: since 4f6e020 the decoding thread converts the frames it reads ahead only for `TryRead` without `FrameRate`; with it, `TryReadFps` feeds the fps filter and converts on the caller's thread, so a sampled read (thumbnails, `-vf fps=1`) keeps the conversion's cost there. The fps graph would move to the decoding thread, and frames the filter would still be dropped before converting; the same bytes, as each thread has its own swscale context with the same settings
   - Status: Maybe
 
 - The picture meters at 9-16 bits and one fused InterlaceDetector pass
@@ -120,11 +124,11 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
   - Status: Maybe
 
 - The native build with link-time optimisation (`--enable-lto`, and for zlib, dav1d, LAME and libwebp)
-  - Why: may shave a little off FFmpeg's C code (its hot loops are assembly already); not measured. Any edit to tools/native/build-ffmpeg.sh rebuilds every platform's FFmpeg, so it waits for a rebuild that's needed anyway, as the SBOM row does, and needs its own before-and-after run of frame-reader-bench.yml (docs/decisions/2026-11-07-performance-work.md)
+  - Why: may shave a little off FFmpeg's C code (its hot loops are assembly already); not measured. Any edit to tools/native/build-ffmpeg.sh rebuilds every platform's FFmpeg, so it waits for a rebuild that's needed anyway (the one for the `dv` muxer, #22, went without it), and needs its own before-and-after run of frame-reader-bench.yml (docs/decisions/2026-11-07-performance-work.md)
   - Status: Maybe
 
 - HDR to SDR: zimg in the native build, with the `zscale` and `tonemap` filters, and a `VideoFrameReaderOptions` option that tone-maps as `-vf zscale=t=linear,tonemap=...,zscale=t=bt709` does
-  - Why: HDR (PQ, HLG) phone and streaming video converted to Bgr24 probably reads washed out today (not checked): swscale doesn't tone-map, and the build has only `scale` among the video filters. zimg is a new linked library (its licence in THIRD-PARTY-NOTICES.md), and any edit to tools/native/build-ffmpeg.sh rebuilds every platform's FFmpeg, so it waits for a rebuild that's needed anyway, as the SBOM row does
+  - Why: HDR (PQ, HLG) phone and streaming video converted to Bgr24 probably reads washed out today (not checked): swscale doesn't tone-map, and the build has only `scale` among the video filters. zimg is a new linked library (its licence in THIRD-PARTY-NOTICES.md), and any edit to tools/native/build-ffmpeg.sh rebuilds every platform's FFmpeg, so it waits for a rebuild that's needed anyway (the one for the `dv` muxer, #22, went without it)
   - Status: Maybe
 
 - A performance check on pull requests: a short ReadPaths run timed against `ffmpeg -f null` in the same job, as an annotation when the ratio worsens, not a failing check
