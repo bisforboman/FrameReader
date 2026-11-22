@@ -7,6 +7,32 @@ a major version. What's merged but not released yet is in changes/framereader/ (
 Up to 2.1.0, FrameReader was released together with ShotDetector at the same version: those versions' changes are in
 ShotDetector's [CHANGELOG.md](../../CHANGELOG.md), each marked "FrameReader:".
 
+## 2.27.0 – 2026-11-22
+
+DV captures copied and trimmed as .dv: the raw dv muxer in FrameReader.Native and Remux.Copy's Start and End; ReadAhead converts ahead.
+
+### New
+
+- `Remux.Copy` trims: `RemuxOptions.Start` and `End` are ffmpeg's input `-ss` and `-to`, the file
+  `ffmpeg -ss S -to E -i IN -c copy OUT` writes (FFMpegCore's `SubVideo`). The copy starts at the keyframe at or before
+  `Start`: exact where every frame is a keyframe (DV, MJPEG, FFV1 with `-g 1`, PCM), from the keyframe before for H.264,
+  HEVC and MPEG-2.
+- `MediaInfo.StartTime`: the container's start time (ffprobe's `format=start_time`), which `Start` and `End` count from.
+- FrameReader.Native: the raw `dv` muxer, so `Remux.Copy` writes .dv files (a DV capture trimmed or copied as .dv,
+  DV from an AVI into .dv), the file `ffmpeg -c copy` writes. Before, "No muxer for ..." with our libraries.
+
+### Faster
+
+- `VideoFrameReader` with `ReadAhead`: `TryRead` (without `FrameRate`) has the decoding thread convert the frames it reads
+  ahead to `FrameFormat` too, so the caller's thread only hands them over; the same bytes, as each thread has its own
+  swscale context with the same settings. The other reads convert in the read, as before. Each frame ahead then holds
+  its converted copy as well as the decoded frame.
+
+### Fixed
+
+- FrameReader.Native: zlib 1.4 (was 1.3.2), linked into FFmpeg's libraries.
+- FrameReader.Native: the SBOM's `documentNamespace` names this repository (was ShotDetector's).
+
 ## 2.26.0 – 2026-11-09
 
 Seekable Streams read as files, so any MP4 opens from memory; faster rotation, audio analysis and measures; the
