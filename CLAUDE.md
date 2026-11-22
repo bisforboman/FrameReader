@@ -8,8 +8,8 @@ plus the `FrameReader.Native` meta-package (our FFmpeg build, LGPL).
 
 It was part of [ShotDetector](https://github.com/bisforboman/shotdetector) until 2026-11-07
 (docs/decisions/2026-11-07-framereader-own-repository.md); its history came with it. ShotDetector depends on the
-package, through its public API only, so a change here reaches ShotDetector's scenedetect comparison once it is
-released, and a breaking change is a major version.
+package, through its public API only, so a change here reaches ShotDetector once it is released (each PR runs
+ShotDetector's main against it first: ci.yml's `shotdetector` job), and a breaking change is a major version.
 
 ## Where things are
 
@@ -44,7 +44,10 @@ released, and a breaking change is a major version.
 - **PR pipeline**: `main` is protected; work on a branch, push, open a PR, and turn auto-merge on at once (drafts
   excepted, and a PR the owner must decide on says so in its body and waits for the answer). Don't push to main.
 - **Required checks**: `build` and `CI passed` (ci.yml). `CI passed` is a gate that needs every other job in ci.yml,
-  passed or skipped; a new job goes in its `needs`.
+  passed or skipped; a new job goes in its `needs`. One exception: `shotdetector` (ShotDetector's main, its tests and
+  its scenedetect comparison against the PR's FrameReader) counts only on a PR that changes decoding (the `changes`
+  job's list: the decoder, the deinterlacers, the BGR conversion, opening and seeking the input, the FFmpeg build);
+  on the others it's informational.
 - **Files an open PR changes**: before editing a file, check the open PRs; if one changes it, wait for it to merge and
   branch from main after it.
 - **Worktrees**: `git worktree add .claude/worktrees/<name> -b <branch> origin/main` (ignored). Sessions working at

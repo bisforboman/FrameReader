@@ -11,10 +11,6 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
 
 ## Next
 
-- The ShotDetector parity check on pull requests: pack the PR's FrameReader to a local feed, build ShotDetector's main against it, run its tests and its scenedetect comparison
-  - Why: since the move a FrameReader change reaches ShotDetector's comparison only once released; this catches a change that moves ShotDetector's results before it merges (ShotDetector's docs/framereader-split.md, step 4). Needs ShotDetector to take FrameReader as a package with an overridable version (its step 6) first
-  - Status: Open
-
 - The mutation entries for FrameReader's quirks: Invoke-Mutations.ps1 and the entries of ShotDetector's tools/mutation/mutations.psd1 whose Project is tests/FrameReader.Tests, with a workflow
   - Why: each reproduced ffmpeg quirk keeps a test that fails when its guard is broken; in ShotDetector's repository those entries no longer find their files
   - Status: Open
