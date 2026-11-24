@@ -11,6 +11,14 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
 
 ## Next
 
+- The tape splitter: .dv recordings from a .dv capture with FrameReader.Native's `dv` muxer
+  - Why: the native build has the raw `dv` muxer since the rebuild with zlib 1.4 (#22), released in 2.27.0 (2026-11-22), but examples/TapeSplitter's README, `TapeScan`'s doc comment and its test still say it has none and send a .dv capture's recordings into AVI (`--as avi`). Say .dv works, and test `--write` of a DV capture as .dv against ffmpeg's files. Left out of #22 because issue #23's session was editing the splitter then
+  - Status: Open
+
+- dav1d 1.5.5 in the native build (issue #33), with the Maybe rows that wait on a rebuild (link-time optimisation; zimg for HDR to SDR) if the owner wants them in the same one
+  - Why: the build pins dav1d 1.5.4 (tools/native/build-ffmpeg.sh); upstream.yml opened #33 for 1.5.5. Any edit to build-ffmpeg.sh rebuilds every platform's FFmpeg, so it is one batched change, checked by the AV1 tests against ffmpeg's frames, and a release (CLAUDE.md: a change to the native build is a release too)
+  - Status: Open
+
 - The mutation entries for FrameReader's quirks: Invoke-Mutations.ps1 and the entries of ShotDetector's tools/mutation/mutations.psd1 whose Project is tests/FrameReader.Tests, with a workflow
   - Why: each reproduced ffmpeg quirk keeps a test that fails when its guard is broken; in ShotDetector's repository those entries no longer find their files
   - Status: Open
@@ -48,10 +56,6 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
 - The owner files the x264 AVX-512 report with VideoLAN
   - Why: CI's VideoWriter step needs DOTNET_TieredCompilation=0 because x264's AVX-512 code and .NET's tiered JIT differ about 1 run in 250 (docs/decisions/2026-10-10-videowriter-s-rare-ci-mismatch.md). A public post from the owner's account
   - Status: Waiting (on the owner)
-
-- The tape splitter: .dv recordings from a .dv capture with FrameReader.Native, once a release carries its `dv` muxer
-  - Why: the native build has the raw `dv` muxer since the rebuild with zlib 1.4 (#22), but examples/TapeSplitter's README, `TapeScan`'s doc comment and its test still say it has none and send a .dv capture's recordings into AVI (`--as avi`). Say .dv works, and test `--write` of a DV capture as .dv against ffmpeg's files. Left out of #22 because issue #23's session was editing the splitter then
-  - Status: Waiting (on the next release, which carries the `dv` muxer)
 
 ## Maybe
 
