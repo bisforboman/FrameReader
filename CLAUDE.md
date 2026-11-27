@@ -20,6 +20,7 @@ ShotDetector's main against it first: ci.yml's `shotdetector` job), and a breaki
 | The FFmpeg interop gotchas | src/FrameReader/CLAUDE.md |
 | Our FFmpeg build | tools/native/build-ffmpeg.sh, .github/workflows/native.yml, src/FrameReader.Native/README.md |
 | The licences of what that build links in | THIRD-PARTY-NOTICES.md |
+| Security: policy, response times, the controls and how adopters check them | SECURITY.md, docs/security.md |
 | What's next | docs/backlog.md |
 | What the owner decided and why | docs/decisions/ (its README; the decisions before the move are in ShotDetector's) |
 
@@ -71,6 +72,9 @@ ShotDetector's main against it first: ci.yml's `shotdetector` job), and a breaki
 - **Security analyzers**: the SDK's Security rules (CA2xxx, CA3xxx, CA5xxx) are errors on every build
   (Directory.Build.props, docs/decisions/2026-11-06-security-analyzers.md). Fix a real finding (the owner decides
   how); suppress a false positive where it is, with a justification.
+- **Security fixes**: SECURITY.md's times (acknowledge within 7 days; high and critical fixed within 30, others 90;
+  the newest minor only) bind every vulnerability report and every native-cves.yml issue; a fix ships with a GitHub
+  security advisory and its CVE in the CHANGELOG entry.
 - **Dependabot**: patch and minor PRs auto-merge; majors wait for a look. FFmpeg.AutoGen stays on 8.x until the
   native build moves to FFmpeg 9.
 - **Commit messages**: what and why, like the history. Small commits.
@@ -96,11 +100,12 @@ ShotDetector's main against it first: ci.yml's `shotdetector` job), and a breaki
   builds, formats and tests them.
 - `benchmarks/FrameReader.Benchmarks`: against FFMpegCore and the ffmpeg executable (frame-reader-bench.yml).
 - `tools/`: `native/build-ffmpeg.sh`, `changelog.py`, `media.py` (pinned real-world media), `nightly-issue.sh`,
-  `vulnerable-packages.py`, `true_peak_reference.py` (LoudnessMeterTests' reference true peaks).
+  `vulnerable-packages.py`, `native_cves.py` (native-cves.yml), `true_peak_reference.py` (LoudnessMeterTests' reference true peaks).
 - `.github/workflows`: `ci.yml`, `release.yml`, `native.yml` (our FFmpeg build, which the others call),
   `realworld-audio.yml` (nightly), `frame-reader-bench.yml` (weekly), `upstream.yml` (weekly: an issue per newer
   FFmpeg, linked library, BtbN build or StyleBro), `codeql.yml`, `dependabot-auto-merge.yml`,
-  `vulnerable-packages.yml` (weekly). Each header says the rest.
+  `vulnerable-packages.yml` (weekly), `native-cves.yml` (weekly: an issue per NVD CVE in a pinned native library),
+  `scorecard.yml` (OpenSSF Scorecard). Each header says the rest.
 
 ## Gotchas
 
