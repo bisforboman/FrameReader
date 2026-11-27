@@ -1,0 +1,65 @@
+name: Native CVEs
+
+# Weekly: known CVEs in what FrameReader.Native ships, FFmpeg and the libraries linked into it (zlib, dav1d, LAME,
+# libwebp; OpenSSL on Linux), at the versions tools/native/build-ffmpeg.sh pins, looked up in the NVD
+# (tools/native_cves.py). An issue per CVE that affects a pinned version and has no issue yet (open or closed: closing
+# one as "not affected" after a look keeps it from coming back). NuGet's audit, vulnerable-packages.yml and Dependabot
+# see NuGet advisories only. SECURITY.md says how fast a fix ships. On a PR that changes the check, a dry run (no
+# issues). NVD_API_KEY (an optional repository secret) raises the NVD's rate limit.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '41 4 * * 2'
+  pull_request:
+    paths:
+      - tools/native_cves.py
+      - .github/workflows/native-cves.yml
+
+permissions:
+  contents: read
+
+jobs:
+  cves:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Look up the pinned versions in the NVD
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: python3 tools/native_cves.py --json findings.json
+
+      - name: An issue per new CVE
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # At most 10 new issues a run (the rest come the next week), so a burst in the NVD can't flood the tracker.
+        run: |
+          gh label create security --color b60205 --description "A vulnerability, or a check for them" 2>/dev/null || true
+          filed=0
+          while read -r f; do
+            id=$(jq -r .id <<<"$f"); component=$(jq -r .component <<<"$f"); version=$(jq -r .version <<<"$f")
+            title="$id in $component $version (FrameReader.Native)"
+            if gh issue list --state all --search "\"$id\" in:title" --json title --jq '.[].title' | grep -qF "$id"; then
+              echo "Already filed: $id"
+              continue
+            fi
+            [ "$filed" -lt 10 ] || { echo "::warning::More than 10 new CVEs; the rest next week"; break; }
+            platforms="every platform"; [ "$(jq -r .linux_only <<<"$f")" = true ] && platforms="the Linux packages (linux-x64, linux-arm64, linux-musl-x64)"
+            gh issue create --title "$title" --label security --body "$(cat <<EOF
+          The NVD lists [$id](https://nvd.nist.gov/vuln/detail/$id) (severity: $(jq -r .severity <<<"$f"), published $(jq -r .published <<<"$f")) as affecting $component $version, which FrameReader.Native ships on $platforms (found by the weekly native CVE check, tools/native_cves.py).
+
+          > $(jq -r .description <<<"$f" | tr '\n' ' ')
+
+          What to do (SECURITY.md: a fix for high and critical within 30 days of an upstream fix, others within 90):
+          - [ ] Does it reach FrameReader? Our build has only some of FFmpeg's decoders, demuxers, filters and protocols (tools/native/build-ffmpeg.sh's configure line). If not, close this issue as not planned, saying why.
+          - [ ] If it does: move the pin in \`tools/native/build-ffmpeg.sh\` to a release with the fix (the upstream check's issue for it, if any, has the steps), or apply the upstream patch if there is no release yet.
+          - [ ] A patch release of FrameReader.Native, whose CHANGELOG entry names $id; a GitHub security advisory if it was exploitable through FrameReader.
+          EOF
+          )"
+            filed=$((filed + 1))
+          done < <(jq -c '.[]' findings.json)
