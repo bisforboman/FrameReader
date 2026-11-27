@@ -160,6 +160,25 @@ jobs:
         with:
           subject-path: 'artifacts/*.nupkg, artifacts/*.snupkg'
 
+      # The SBOMs, out of the packages, for the GitHub release and the attestation below: FrameReader's (pack writes it
+      # into the package, Microsoft.Sbom.Targets) and each native package's FFmpeg build (build-ffmpeg.sh's).
+      - name: SBOMs
+        run: |
+          mkdir sbom
+          unzip -p "artifacts/FrameReader.$V.nupkg" _manifest/spdx_2.2/manifest.spdx.json > "sbom/FrameReader.$V.spdx.json"
+          for rid in win-x64 linux-x64 linux-arm64 linux-musl-x64 osx-arm64; do
+            unzip -p "artifacts/FrameReader.Native.$rid.$V.nupkg" sbom.spdx.json > "sbom/FrameReader.Native.$rid.$V.spdx.json"
+          done
+          for f in sbom/*.json; do jq -e .spdxVersion "$f" > /dev/null || { echo "::error::$f isn't an SPDX SBOM"; exit 1; }; done
+
+      # Signed: this SBOM describes this package (gh attestation verify <nupkg> --repo bisforboman/FrameReader
+      # --predicate-type https://spdx.dev/Document/v2.2).
+      - name: Attest FrameReader's SBOM
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-path: artifacts/FrameReader.${{ env.V }}.nupkg
+          sbom-path: sbom/FrameReader.${{ env.V }}.spdx.json
+
       # Request the temporary key right before pushing: it is valid for one hour.
       - name: NuGet login
         uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
@@ -194,12 +213,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         # Its tag on this commit (unless pushed by hand), its CHANGELOG section ("## X.Y.Z – date" up to the next "## ")
-        # as the notes, else GitHub's PR list, and its packages.
+        # as the notes, else GitHub's PR list, and its packages and SBOMs.
         run: |
           prerelease=""; [[ "$V" == *-* ]] && prerelease="--prerelease"
           awk -v v="## $V " 'index($0, v) == 1 { on = 1; next } on && /^## / { exit } on' src/FrameReader/CHANGELOG.md > notes.md
           if [ -s notes.md ]; then notes=(--notes-file notes.md); else notes=(--generate-notes); fi
-          gh release create "v$V" artifacts/*.nupkg --target "$GITHUB_SHA" --title "FrameReader $V" "${notes[@]}" $prerelease
+          gh release create "v$V" artifacts/*.nupkg sbom/*.spdx.json --target "$GITHUB_SHA" --title "FrameReader $V" "${notes[@]}" $prerelease
 
   # A stable release: an issue to make it the API baseline (Directory.Build.props), once nuget.org serves it, since
   # package validation downloads the baseline. An issue rather than a PR: a PR opened with this token gets no CI runs.
