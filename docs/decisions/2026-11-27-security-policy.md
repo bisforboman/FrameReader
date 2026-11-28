@@ -35,16 +35,18 @@ native packages' SBOMs; and the OpenSSF Scorecard (scorecard.yml, its badge in t
 ## How the CVE check reports
 
 The check's first run against the NVD, on the pull request, found 121 CVEs listed as affecting FFmpeg 8.1.3 (about
-25 high or critical), none in the other libraries. Many are listed against every FFmpeg version (no fixed version
-recorded, or not analysed yet), and many are in decoders our build leaves out. One issue per CVE, 10 a week, would
-have taken some 12 weeks. Asked: "How should the check report?" Options: "Summary + per-issue high
+25 high or critical), none in the other libraries. The question supposed that many were listed against every
+FFmpeg version; the second run showed none are: each has a range, most ending at FFmpeg 9.0 or 9.1 (no 8.1.x fix
+recorded), and two only through a git-snapshot date (`2025-01-13`) compared as a version, a bug fixed on the same
+pull request. Some will be in decoders our build leaves out. One issue per CVE, 10 a week, would have taken some 12
+weeks. Asked: "How should the check report?" Options: "Summary + per-issue high
 (Recommended)", "One summary issue only", "Per-CVE as built", "Triage the 121 first" (in a cloud session before
 merging).
 
 **Summary + per-issue high**: one standing issue, "Native CVEs (FrameReader.Native)", lists every affecting CVE
 (rewritten each week: high and critical with a known range, the rest with a known range, range unknown); an issue of
 its own only for a high or critical CVE whose affected range the NVD records (an exact version or bounds), at most
-10 a run. The range-unknown ones are triaged from the summary.
+10 a run (about 20 on the first runs). The rest are triaged from the summary.
 
 Left to the owner, as repository and nuget.org settings: private vulnerability reporting (Settings, Code security;
 SECURITY.md relies on it), secret scanning with push protection, and a reserved ID prefix on nuget.org (`FrameReader.*`,

@@ -69,6 +69,9 @@ def range_known(match):
     return bounds or match.get("criteria", "").split(":")[5:6] not in (["*"], ["-"], [])
 
 
+DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
 def affects(match, vendor, product, version):
     """Whether one NVD cpeMatch entry (vulnerable) covers vendor:product at version."""
     if not match.get("vulnerable"):
@@ -79,6 +82,11 @@ def affects(match, vendor, product, version):
     cpe_version = parts[5]
     bounds = [k for k in ("versionStartIncluding", "versionStartExcluding", "versionEndIncluding",
                           "versionEndExcluding") if k in match]
+    # FFmpeg's NVD entries also name git snapshots by date (versionEndExcluding 2025-01-13): no order against a
+    # release version such as 8.1.3 (as numbers, 8 < 2025 would match every release), so such an entry says nothing
+    # about ours.
+    if any(DATE.match(str(match[k])) for k in bounds) or DATE.match(cpe_version):
+        return False
     if cpe_version not in ("*", "-") and not bounds:
         return _cmp(cpe_version, version) == 0
     if cpe_version == "-":

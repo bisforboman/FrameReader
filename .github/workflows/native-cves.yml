@@ -5,8 +5,8 @@ name: Native CVEs
 # (tools/native_cves.py). Every CVE that affects a pinned version goes in one standing issue, "Native CVEs
 # (FrameReader.Native)", whose text each run replaces. A high or critical one whose affected range the NVD knows also
 # gets an issue of its own, once (open or closed: closing one as "not affected" after a look keeps it from coming
-# back); the NVD lists many FFmpeg CVEs against every version until it analyses them, which would otherwise file
-# dozens (docs/decisions/2026-11-27-security-policy.md). NuGet's audit, vulnerable-packages.yml and Dependabot see
+# back); the first run found 121 for FFmpeg 8.1.3, which an issue each would have buried
+# (docs/decisions/2026-11-27-security-policy.md). NuGet's audit, vulnerable-packages.yml and Dependabot see
 # NuGet advisories only. SECURITY.md says how fast a fix ships. On a PR that changes the check, a dry run (no issues).
 # NVD_API_KEY (an optional repository secret) raises the NVD's rate limit.
 on:
