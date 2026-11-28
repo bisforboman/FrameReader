@@ -6,10 +6,13 @@ from), so the check follows the build. For each product, every CVE the NVD lists
 configurations are matched against our pinned version here (exact versions and version ranges alike), rather than
 trusting a server-side match. NuGet's audit and Dependabot see NuGet advisories only, not these libraries.
 
-    python3 tools/native_cves.py [--json out.json] [--nvd-json fixture.json]
+    python3 tools/native_cves.py [--json out.json] [--summary out.md] [--nvd-json fixture.json]
 
-Prints one line per affecting CVE; with --json, writes them for .github/workflows/native-cves.yml, which opens an issue
-per CVE not filed before. NVD_API_KEY (optional) raises NVD's rate limit; without it a request goes every 6 s.
+Prints one line per affecting CVE; with --json, writes them for .github/workflows/native-cves.yml, and with --summary
+the body of its standing summary issue (every affecting CVE). Each finding says whether the NVD knows the affected
+range (an exact version or version bounds; "range unknown" when it lists every version of the product, as it does
+until a CVE is analysed or when no fixed version is recorded) and the first fixed version when it gives one. The
+workflow opens an issue of its own only for a high or critical CVE whose range is known. NVD_API_KEY (optional) raises NVD's rate limit; without it a request goes every 6 s.
 --nvd-json reads a saved NVD response for every product instead of asking the NVD (tests).
 """
 import argparse
@@ -59,6 +62,13 @@ def _cmp(a, b):
     return (ka > kb) - (ka < kb)
 
 
+def range_known(match):
+    """Whether a cpeMatch entry names an exact version or version bounds, not every version of the product."""
+    bounds = any(k in match for k in ("versionStartIncluding", "versionStartExcluding", "versionEndIncluding",
+                                      "versionEndExcluding"))
+    return bounds or match.get("criteria", "").split(":")[5:6] not in (["*"], ["-"], [])
+
+
 def affects(match, vendor, product, version):
     """Whether one NVD cpeMatch entry (vulnerable) covers vendor:product at version."""
     if not match.get("vulnerable"):
@@ -91,15 +101,20 @@ def _matches(node):
 
 
 def affecting(vulnerabilities, vendor, product, version):
-    """The CVEs among an NVD response's vulnerabilities whose configurations cover our version."""
+    """(cve, range known, fixed in) for the CVEs among an NVD response's vulnerabilities whose configurations cover
+    our version. The range is known when any matching entry names a version or bounds; fixed in is the lowest
+    versionEndExcluding among those."""
     hits = []
     for item in vulnerabilities:
         cve = item["cve"]
         if cve.get("vulnStatus") == "Rejected":
             continue
         nodes = [n for c in cve.get("configurations", []) for n in c.get("nodes", [])]
-        if any(affects(m, vendor, product, version) for n in nodes for m in _matches(n)):
-            hits.append(cve)
+        matched = [m for n in nodes for m in _matches(n) if affects(m, vendor, product, version)]
+        if matched:
+            fixes = sorted((m["versionEndExcluding"] for m in matched if "versionEndExcluding" in m),
+                           key=_version_key)
+            hits.append((cve, any(range_known(m) for m in matched), fixes[0] if fixes else ""))
     return hits
 
 
@@ -113,6 +128,43 @@ def _severity(cve):
             if score is not None:
                 return f"{sev or '?'} {score}"
     return "not scored yet"
+
+
+SEVERITY_ORDER = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+
+
+def summary(findings, listed):
+    """The summary issue's body (Markdown): every affecting CVE, high and critical with a known range first."""
+    def rank(f):
+        return (SEVERITY_ORDER.get(f["severity"].split()[0], 4), f["published"])
+
+    def row(f):
+        fixed = f["fixed_in"] or "?"
+        only = " (Linux)" if f["linux_only"] else ""
+        return (f"| [{f['id']}](https://nvd.nist.gov/vuln/detail/{f['id']}) | {f['component']} {f['version']}{only}"
+                f" | {f['severity']} | {fixed} | {f['published']} |")
+
+    head = "| CVE | Ships | Severity | Fixed in | Published |\n| --- | --- | --- | --- | --- |"
+    groups = [
+        ("High and critical, range known (each has an issue of its own)",
+         [f for f in findings if f["range_known"] and f["actionable"]]),
+        ("Medium and low, range known", [f for f in findings if f["range_known"] and not f["actionable"]]),
+        ("Range unknown (the NVD lists every version: not analysed yet, or no fixed version recorded)",
+         [f for f in findings if not f["range_known"]]),
+    ]
+    out = ["Known CVEs in what FrameReader.Native ships, at the versions tools/native/build-ffmpeg.sh pins, from the "
+           "NVD (native-cves.yml; refreshed weekly, this text is replaced each time). " + listed,
+           "",
+           "A CVE here may not reach FrameReader: our build has only some of FFmpeg's decoders, demuxers, filters and "
+           "protocols (build-ffmpeg.sh's configure line). SECURITY.md's times apply to the ones that do. A row "
+           "leaves the list when the pin moves past it or the NVD changes its range.",
+           ""]
+    if not findings:
+        out.append("None.")
+    for title, rows in groups:
+        if rows:
+            out += [f"## {title}: {len(rows)}", "", head] + [row(f) for f in sorted(rows, key=rank)] + [""]
+    return "\n".join(out)
 
 
 def fetch(vendor, product, key):
@@ -144,11 +196,12 @@ def fetch(vendor, product, key):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--json", help="write the findings here")
+    ap.add_argument("--summary", help="write the summary issue's body (Markdown) here")
     ap.add_argument("--nvd-json", help="a saved NVD response to use for every product instead of the NVD")
     ap.add_argument("--script", default=SCRIPT)
     args = ap.parse_args()
     key = os.environ.get("NVD_API_KEY", "")
-    findings = []
+    findings, listed = [], []
     for name, version, vendor, product, linux_only in products(args.script):
         if args.nvd_json:
             vulns = json.load(open(args.nvd_json, encoding="utf-8"))["vulnerabilities"]
@@ -156,15 +209,23 @@ def main():
             vulns = fetch(vendor, product, key)
         hits = affecting(vulns, vendor, product, version)
         print(f"{name} {version} (cpe:2.3:a:{vendor}:{product}): {len(vulns)} CVEs listed, {len(hits)} affect it")
-        for cve in hits:
+        listed.append(f"{name} {version}: {len(hits)}")
+        for cve, known, fixed in hits:
             desc = next((d["value"] for d in cve.get("descriptions", []) if d.get("lang") == "en"), "")
+            sev = _severity(cve)
             f = {"id": cve["id"], "component": name, "version": version, "linux_only": linux_only,
-                 "severity": _severity(cve), "published": cve.get("published", "")[:10], "description": desc}
+                 "severity": sev, "published": cve.get("published", "")[:10], "description": desc,
+                 "range_known": known, "fixed_in": fixed,
+                 "actionable": known and sev.split()[0] in ("HIGH", "CRITICAL")}
             findings.append(f)
-            print(f"  {f['id']} ({f['severity']}, published {f['published']})")
+            print(f"  {f['id']} ({sev}, published {f['published']}, "
+                  f"{'fixed in ' + fixed if fixed else 'range known' if known else 'range unknown'})")
     if args.json:
         with open(args.json, "w", encoding="utf-8") as fh:
             json.dump(findings, fh, indent=1)
+    if args.summary:
+        with open(args.summary, "w", encoding="utf-8") as fh:
+            fh.write(summary(findings, "Affecting CVEs: " + ", ".join(listed) + "."))
 
 
 if __name__ == "__main__":

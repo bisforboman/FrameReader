@@ -47,7 +47,8 @@ gh attestation verify FrameReader.2.27.0.nupkg --repo bisforboman/FrameReader \
   weekly).
 - **FFmpeg and the native libraries**: our own build, from pinned, checksummed sources, with only the decoders,
   demuxers, filters and protocols FrameReader uses (less code that untrusted input can reach). Each week
-  native-cves.yml looks up the exact versions in the NVD and opens an issue per CVE that affects one, and upstream.yml
+  native-cves.yml looks up the exact versions in the NVD: every CVE that affects one is in the standing issue
+  "Native CVEs (FrameReader.Native)", a high or critical one with a recorded range in an issue of its own. upstream.yml
   opens one per new release of FFmpeg, zlib, dav1d or OpenSSL; [SECURITY.md](../SECURITY.md) says how fast a fix
   ships.
 - **GitHub Actions**: every external action pinned to a commit SHA (Dependabot moves the pins weekly), every

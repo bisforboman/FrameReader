@@ -40,6 +40,8 @@ Until the advisory is published, the report stays between the reporter and the m
 ## Native libraries
 
 FrameReader.Native ships FFmpeg with zlib, dav1d, LAME and libwebp linked in (and OpenSSL on Linux). Each week
-`native-cves.yml` looks up those exact versions in the NVD and opens an issue for each CVE that affects one, and
-`upstream.yml` an issue for each new release of them; both are handled within the times above. Each native package
+`native-cves.yml` looks up those exact versions in the NVD: every CVE that affects one is listed in the open issue
+"Native CVEs (FrameReader.Native)", and each high or critical one whose affected versions the NVD records gets an
+issue of its own. `upstream.yml` opens an issue for each new release of them. A CVE that reaches FrameReader (our
+build leaves out most of FFmpeg's decoders, filters and protocols) is fixed within the times above. Each native package
 carries an SPDX SBOM (`sbom.spdx.json`) of what's inside, with CPEs, for your own scanners.
