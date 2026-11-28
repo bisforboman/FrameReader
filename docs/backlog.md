@@ -43,10 +43,6 @@ Status: **Open**, **In progress**, **Maybe**; finished rows (in backlog-done.md)
   - Why: it's false for every Stream (`_io == null`), so `VideoFrameReader`'s look-ahead (`TryReadForwardTo`, `ReadAt`) skips ahead less on a FileStream or MemoryStream than on the same file's path, though since #11 such a stream seeks as the file does; needs the look-ahead's tests run on a seekable Stream too
   - Status: Open
 
-- A weekly check for CVEs against what FrameReader.Native links in: the versions and CPEs in the native build's sbom.spdx.json (FFmpeg, zlib, dav1d, LAME, libwebp; OpenSSL on Linux) looked up in the NVD (or OSV), an issue per new CVE that affects the pinned version (tools/nightly-issue.sh), in upstream.yml or a workflow of its own
-  - Why: NuGet's audit, vulnerable-packages.yml and Dependabot only see NuGet advisories, so they cover the FFmpeg.AutoGen bindings but not the native libraries, where a media library's CVEs land; upstream.yml notices a newer release, not whether the version we ship has a known CVE (a fix backported to an older point release, or a CVE with no release yet, goes unseen)
-  - Status: Open
-
 ## Waiting
 
 - Move to FFmpeg 9's libraries (FFmpeg.AutoGen 9, Native packages on 9.0.x) when opencv-python's Linux wheels bundle FFmpeg 9

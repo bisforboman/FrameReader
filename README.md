@@ -1,5 +1,7 @@
 # FrameReader
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/bisforboman/FrameReader/badge)](https://scorecard.dev/viewer/?uri=github.com/bisforboman/FrameReader)
+
 Fast in-process video and audio for .NET through FFmpeg's libraries: frames at a size and pixel format with the bytes
 ffmpeg's scale and format filters give, exact seeking, thumbnails, audio samples and measures, writing, stream copy
 and probing. No ffmpeg process, no pipes.
@@ -12,6 +14,8 @@ dotnet add package FrameReader.Native.linux-x64   # FFmpeg's libraries for your 
 - What it does and how to use it: [src/FrameReader/README.md](src/FrameReader/README.md), the package's front page.
 - Releases: [src/FrameReader/CHANGELOG.md](src/FrameReader/CHANGELOG.md).
 - Our FFmpeg build: [src/FrameReader.Native/README.md](src/FrameReader.Native/README.md).
+- Security: reporting a vulnerability and how fast fixes ship in [SECURITY.md](SECURITY.md); what protects the
+  packages and how to verify them (attestations, SBOMs, the weekly checks) in [docs/security.md](docs/security.md).
 - Coming from FFMpegCore: [docs/coming-from-ffmpegcore.md](docs/coming-from-ffmpegcore.md), and an ASP.NET Core
   thumbnail API in [examples/ThumbnailApi](examples/ThumbnailApi).
 - Splitting a digitised tape at its blank stretches (black, a blue screen, a frozen picture, silence), a report of

@@ -25,6 +25,11 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>
+    <!-- An SPDX SBOM of the package and what it depends on, in the package (_manifest/spdx_2.2/), attached to the
+         GitHub release with a signed attestation (release.yml). The native packages carry their own (sbom.spdx.json). -->
+    <GenerateSBOM>true</GenerateSBOM>
+    <SbomGenerationNamespaceBaseUri>https://github.com/bisforboman/FrameReader/spdx</SbomGenerationNamespaceBaseUri>
+    <SbomGenerationVerbosity>Warning</SbomGenerationVerbosity>
   </PropertyGroup>
 
   <ItemGroup>
@@ -35,6 +40,7 @@
   <ItemGroup>
     <!-- MIT bindings to FFmpeg 8.1's libraries. -->
     <PackageReference Include="FFmpeg.AutoGen" />
+    <PackageReference Include="Microsoft.Sbom.Targets" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
